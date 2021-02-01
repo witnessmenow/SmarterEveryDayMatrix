@@ -190,7 +190,7 @@ void setup() {
   wm.addParameter(&custom_scroll_speed);
 
   //reset settings - wipe credentials for testing
-  wm.resetSettings();
+  //wm.resetSettings();
 
   // Display Setup
   dma_display.begin();
