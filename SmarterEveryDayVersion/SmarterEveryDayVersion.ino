@@ -28,10 +28,18 @@
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <FS.h>
+#include <SPIFFS.h>
 
 // ----------------------------
 // Additional Libraries - each one of these will need to be installed.
 // ----------------------------
+
+#include <WiFiManager.h>
+// Captive portal for configuring the WiFi
+
+// Can be installed from the library manager (Search for WifiManager", install the Alhpa version)
+// https://github.com/tzapu/WiFiManager
 
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 // This is the library for interfacing with the display
@@ -76,7 +84,7 @@
 MatrixPanel_I2S_DMA dma_display(true);
 
 WiFiClientSecure secured_client;
-UniversalTelegramBot bot(BOT_TOKEN, secured_client);
+UniversalTelegramBot bot("12345", secured_client);
 
 
 uint16_t myBLACK = dma_display.color565(0, 0, 0);
@@ -84,6 +92,14 @@ uint16_t myWHITE = dma_display.color565(255, 255, 255);
 uint16_t myRED = dma_display.color565(255, 0, 0);
 uint16_t myGREEN = dma_display.color565(0, 255, 0);
 uint16_t myBLUE = dma_display.color565(0, 0, 255);
+
+char botToken[40];
+char chatId[20]  = "-1";
+String chatIdStr;
+char scrollSpeed[3] = "35";
+
+//flag for saving data
+bool shouldSaveConfig = false;
 
 // -------------------------------------
 // -------   Text Configuraiton   ------
@@ -111,9 +127,70 @@ struct emojii
   emojii *next;
 };
 
+//callback notifying us of the need to save config
+void saveConfigCallback () {
+  Serial.println("Should save config");
+  shouldSaveConfig = true;
+}
+
+void setupSpiffs() {
+  //clean FS, for testing
+  // SPIFFS.format();
+
+  //read configuration from FS json
+  Serial.println("mounting FS...");
+
+  if (SPIFFS.begin()) {
+    Serial.println("mounted file system");
+    if (SPIFFS.exists("/config.json")) {
+      //file exists, reading and loading
+      Serial.println("reading config file");
+      File configFile = SPIFFS.open("/config.json", "r");
+      if (configFile) {
+        Serial.println("opened config file");
+        StaticJsonDocument<512> json;
+        DeserializationError error = deserializeJson(json, configFile);
+        serializeJsonPretty(json, Serial);
+        if (!error) {
+          Serial.println("\nparsed json");
+
+          strcpy(botToken, json["botToken"]);
+          strcpy(chatId, json["chatId"]);
+          strcpy(scrollSpeed, json["scrollSpeed"]);
+
+        } else {
+          Serial.println("failed to load json config");
+        }
+      }
+    }
+  } else {
+    Serial.println("failed to mount FS");
+  }
+  //end read
+}
+
 void setup() {
 
   Serial.begin(115200);
+
+  setupSpiffs();
+
+  WiFiManager wm;
+
+  //set config save notify callback
+  wm.setSaveConfigCallback(saveConfigCallback);
+
+  WiFiManagerParameter custom_bot_token("botToken", "Bot Token", botToken, 60);
+  WiFiManagerParameter custom_chat_id("chatId", "Chat Id", chatId, 20);
+  WiFiManagerParameter custom_scroll_speed("scrollSpeed", "Scroll Speed", scrollSpeed, 3);
+
+  //add all your parameters here
+  wm.addParameter(&custom_bot_token);
+  wm.addParameter(&custom_chat_id);
+  wm.addParameter(&custom_scroll_speed);
+
+  //reset settings - wipe credentials for testing
+  wm.resetSettings();
 
   // Display Setup
   dma_display.begin();
@@ -123,19 +200,46 @@ void setup() {
   dma_display.setTextWrap(false); // N.B!! Don't wrap at end of line
   dma_display.setTextColor(myRED); // Can change the colour here
 
-  // attempt to connect to Wifi network:
-  Serial.print("Connecting to Wifi SSID ");
-  Serial.print(WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  secured_client.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    Serial.print(".");
-    delay(500);
+  if (!wm.autoConnect("AutoConnectAP", "password")) {
+    Serial.println("failed to connect and hit timeout");
+    delay(3000);
+    // if we still have not connected restart and try all over again
+    ESP.restart();
+    delay(5000);
   }
+
+  strcpy(botToken, custom_bot_token.getValue());
+  strcpy(chatId, custom_chat_id.getValue());
+  strcpy(scrollSpeed, custom_scroll_speed.getValue());
+
+  //save the custom parameters to FS
+  if (shouldSaveConfig) {
+    Serial.println("saving config");
+    DynamicJsonDocument  json(200);
+    json["botToken"] = botToken;
+    json["chatId"]   = chatId;
+    json["scrollSpeed"]   = scrollSpeed;
+
+    File configFile = SPIFFS.open("/config.json", "w");
+    if (!configFile) {
+      Serial.println("failed to open config file for writing");
+    }
+
+    serializeJsonPretty(json, Serial);
+    if (serializeJson(json, configFile) == 0) {
+      Serial.println(F("Failed to write to file"));
+    }
+    configFile.close();
+    //end save
+    shouldSaveConfig = false;
+  }
+
   Serial.print("\nWiFi connected. IP address: ");
   Serial.println(WiFi.localIP());
 
+  bot.updateToken(String(botToken));
+
+  chatIdStr = String(chatId);
 
 }
 
@@ -298,7 +402,7 @@ void loop() {
       // This is where you would check is the message from a valid source
       // You can get your ID from myIdBot in the Telegram client
       //if(bot.messages[0].chat_id == "175753388")
-      if (true) {
+      if (chatIdStr == "-1" || chatIdStr == bot.messages[0].chat_id ) {
 
         // destroy the old Emojii objects
         destroyEmojiiList();
