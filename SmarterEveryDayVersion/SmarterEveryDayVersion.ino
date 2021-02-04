@@ -86,6 +86,7 @@ MatrixPanel_I2S_DMA dma_display(true);
 WiFiClientSecure secured_client;
 UniversalTelegramBot bot("12345", secured_client);
 
+#define BUTTON_PIN 21
 
 uint16_t myBLACK = dma_display.color565(0, 0, 0);
 uint16_t myWHITE = dma_display.color565(255, 255, 255);
@@ -156,6 +157,7 @@ void setupSpiffs() {
   //read configuration from FS json
   Serial.println("mounting FS...");
 
+  // May need to make it begin(true) first time you are using SPIFFS
   if (SPIFFS.begin()) {
     Serial.println("mounted file system");
     if (SPIFFS.exists("/config.json")) {
@@ -187,6 +189,8 @@ void setupSpiffs() {
 
 void setup() {
 
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
   Serial.begin(115200);
 
   setupSpiffs();
@@ -216,12 +220,23 @@ void setup() {
   dma_display.setTextWrap(false); // N.B!! Don't wrap at end of line
   dma_display.setTextColor(textColour); // Can change the colour here
 
-  if (!wm.autoConnect("AutoConnectAP", "password")) {
-    Serial.println("failed to connect and hit timeout");
-    delay(3000);
-    // if we still have not connected restart and try all over again
-    ESP.restart();
-    delay(5000);
+  if (digitalRead(BUTTON_PIN) == LOW) {
+    Serial.println("Entering Forced Config Mode");
+    if (!wm.startConfigPortal("SmarterDisplay", "everyday")) {
+      Serial.println("failed to connect and hit timeout");
+      delay(3000);
+      //reset and try again, or maybe put it to deep sleep
+      ESP.restart();
+      delay(5000);
+    }
+  } else {
+    if (!wm.autoConnect("SmarterDisplay", "everyday")) {
+      Serial.println("failed to connect and hit timeout");
+      delay(3000);
+      // if we still have not connected restart and try all over again
+      ESP.restart();
+      delay(5000);
+    }
   }
 
   strcpy(botToken, custom_bot_token.getValue());
@@ -300,6 +315,9 @@ bool displayReady = false;
 String hiddenVersion; //This string will be used to index the Emojiis
 
 int emojiiIndex = 0;
+
+int panicButtonCount = 0;
+bool panicMode = false;
 
 emojii *firstEmojii = NULL;
 emojii *currentEmojii = NULL;
@@ -389,9 +407,6 @@ void loop() {
             } else {
               checkTelegram = true;
             }
-            isAnimationDue = 0;
-          } else {
-            isAnimationDue = countNow + 1000;
           }
           displayReady = true;
           break;
@@ -466,13 +481,16 @@ void loop() {
   unsigned long now = millis();
   if (now > isAnimationDue)
   {
-
     // This sets the timer for when we should scroll again.
     isAnimationDue = now + delayBetweeenAnimations;
 
     if (screenState == sCount && lastDisplayedCount == countDownValue) {
       // No need to display
     } else {
+      if (screenState == sCount)
+      {
+        lastDisplayedCount = countDownValue;
+      }
       // This code swaps the second buffer to be visible (puts it on the display)
       dma_display.showDMABuffer();
 
@@ -480,6 +498,30 @@ void loop() {
       dma_display.flipDMABuffer();
     }
 
+    if (digitalRead(BUTTON_PIN) == LOW) {
+      if (!panicMode)
+      {
+        panicButtonCount++;
+        if (panicButtonCount > 60) {
+          // we are panic-in skywalker
+          panicMode = true;
+          Serial.println("We are panic-in Skywalker right now");
+
+          //Set the display to countdown for 5 seconds
+          countDownValue = 6;
+          secondCountDown = 0; // will trigger straight away
+
+          lastDisplayedCount = -1;
+
+          screenState = sCount;
+          dma_display.setTextSize(3);
+          panicButtonCount = 0;
+        }
+      }
+    } else {
+      panicButtonCount = 0;
+      panicMode = false;
+    }
     displayReady = false;
 
   }
@@ -490,7 +532,12 @@ void loop() {
   {
     telegramCoolDown = now + 1000;
     checkTelegram = false;
-    int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+
+    int skipMessage = (digitalRead(BUTTON_PIN) == LOW) ? 1 : 0;
+    if (skipMessage > 0) {
+      Serial.println("Skipping the next Telegram Message");
+    }
+    int numNewMessages = bot.getUpdates(bot.last_message_received + 1 + skipMessage);
     Serial.print("numNewMessages: ");
     Serial.println(numNewMessages);
     Serial.print("WiFi Strength: ");
