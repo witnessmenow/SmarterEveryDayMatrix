@@ -600,23 +600,23 @@ void loop() {
     if (skipMessage > 0) {
       Serial.println("Skipping the next Telegram Message");
     }
-    
+
     Serial.print("WiFi Strength: ");
-    if(WiFi.RSSI() == 0){
+    if (WiFi.RSSI() == 0) {
       wifiDownCount++;
-      if(wifiDownCount > 5){
+      if (wifiDownCount > 5) {
         Serial.println("Wfi seems to be disconnected, trying a restart");
         // if we still have not connected restart and try all over again
         ESP.restart();
-        delay(5000);  
+        delay(5000);
       }
     }
     Serial.println(WiFi.RSSI());
     int numNewMessages = bot.getUpdates(bot.last_message_received + 1 + skipMessage);
     Serial.print("numNewMessages: ");
     Serial.println(numNewMessages);
-    //    if(numNewMessages == 0)
-    //      numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+    if (numNewMessages == 0)
+      numNewMessages = bot.getUpdates(bot.last_message_received + 1 + skipMessage);
     if (numNewMessages > 0)
     {
       Serial.println("got response");
@@ -629,11 +629,14 @@ void loop() {
         // destroy the old Emojii objects
         destroyEmojiiList();
         dma_display.fillScreen(myBLACK);
+        displayReady = false;
 
         // Takes the contents of the message, and sets it to be displayed.
         hiddenVersion = bot.messages[0].text;
         shownText = String(hiddenVersion); // Making a second copy of the text.
         Serial.println(hiddenVersion);
+
+
         if (hiddenVersion.startsWith("/count")) {
           hiddenVersion.replace("/count", "");
           countDownValue = hiddenVersion.toInt() + 1; // We will trigger the countdown mechanic imedialty,
@@ -671,118 +674,119 @@ void loop() {
               currentEmojii->next = NULL;
             }
           }
-        }
-      } else if (hiddenVersion.startsWith("/static")) {
+        } else if (hiddenVersion.startsWith("/static")) {
 
-        hiddenVersion.replace("/static ", "");
-        hiddenVersion.replace("/static", "");
+          hiddenVersion.replace("/static ", "");
+          hiddenVersion.replace("/static", "");
 
-        shownText.replace("/static ", "");
-        shownText.replace("/static", "");
+          shownText.replace("/static ", "");
+          shownText.replace("/static", "");
 
-        updateFinished = false;
+          dma_display.setTextSize(FONT_SIZE);
 
-        //Stripping out new line
-        replaceEmojiiText("\n", "", "");
+          updateFinished = false;
 
-        bool hasEmojii = replaceEmojiiText("🦖", "   ", "%1%"); // T-Rex
-        hasEmojii = replaceEmojiiText("🦕", "   ", "%2%") || hasEmojii; // Tall Dino
-        hasEmojii = replaceEmojiiText("🚀", "   ", "%3%") || hasEmojii; // Rocket
-        hasEmojii = replaceEmojiiText("🌕", "   ", "%4%") || hasEmojii; // Full Moon
-        hasEmojii = replaceEmojiiText("🌙", "   ", "%5%") || hasEmojii; // Crecent Moon
-        hasEmojii = replaceEmojiiText("🪐", "   ", "%6%") || hasEmojii; // Crecent Moon
+          //Stripping out new line
+          replaceEmojiiText("\n", "", "");
 
-        if (hasEmojii)
-        {
-          // This will extract the correct position to draw each emoji
-          parseEmojii(hiddenVersion, shownText, "%1%", BrownDino);
-          parseEmojii(hiddenVersion, shownText, "%2%", TallDino);
-          parseEmojii(hiddenVersion, shownText, "%3%", Rocket);
-          parseEmojii(hiddenVersion, shownText, "%4%", Moon);
-          parseEmojii(hiddenVersion, shownText, "%5%", Cresent);
-          parseEmojii(hiddenVersion, shownText, "%6%", Ring);
-        }
+          bool hasEmojii = replaceEmojiiText("🦖", "   ", "%1%"); // T-Rex
+          hasEmojii = replaceEmojiiText("🦕", "   ", "%2%") || hasEmojii; // Tall Dino
+          hasEmojii = replaceEmojiiText("🚀", "   ", "%3%") || hasEmojii; // Rocket
+          hasEmojii = replaceEmojiiText("🌕", "   ", "%4%") || hasEmojii; // Full Moon
+          hasEmojii = replaceEmojiiText("🌙", "   ", "%5%") || hasEmojii; // Crecent Moon
+          hasEmojii = replaceEmojiiText("🪐", "   ", "%6%") || hasEmojii; // Ring Planet
 
-        screenState = sStatic;
-        dma_display.setTextSize(2);
-        textYPosition = dma_display.height() / 2 - (FONT_SIZE * 8 / 2);
-      } else if (hiddenVersion.indexOf("\n") >= 0) {
-        screenState = sVert;
-        textYPosition = dma_display.height() + 7; // 7 to allow for Emoji
-        delayBetweeenAnimations = VERTICAL_SCROLL;
-        replaceEmojiiText("\n", "\n\n", "^^");
-        dma_display.setTextSize(2);
-
-        bool hasEmojii = replaceEmojiiText("🦖", "   ", "%1%"); // T-Rex
-        hasEmojii = replaceEmojiiText("🦕", "   ", "%2%") || hasEmojii; // Tall Dino
-        hasEmojii = replaceEmojiiText("🚀", "   ", "%3%") || hasEmojii; // Rocket
-        hasEmojii = replaceEmojiiText("🌕", "   ", "%4%") || hasEmojii; // Full Moon
-        hasEmojii = replaceEmojiiText("🌙", "   ", "%5%") || hasEmojii; // Crecent Moon
-        hasEmojii = replaceEmojiiText("🪐", "   ", "%6%") || hasEmojii; // Crecent Moon
-
-        int lineCount = 0;
-        Serial.println(hiddenVersion);
-        String hiddenTextTemp = String(hiddenVersion);
-        String visibleTextTemp = String(shownText);
-        bool keepChecking = true;
-        while (keepChecking) {
-          int endIndex = hiddenTextTemp.indexOf("^^");
-          String tempHidden;
-          String tempShown;
-          if (endIndex > 0) {
-            tempHidden = hiddenTextTemp.substring(0, endIndex);
-            tempShown = visibleTextTemp.substring(0, endIndex);
-
-            hiddenTextTemp = hiddenTextTemp.substring(endIndex + 2);
-            visibleTextTemp = visibleTextTemp.substring(endIndex + 2);
-          } else {
-            keepChecking = false;
-            tempHidden = hiddenTextTemp;
-            tempShown = visibleTextTemp;
+          if (hasEmojii)
+          {
+            // This will extract the correct position to draw each emoji
+            parseEmojii(hiddenVersion, shownText, "%1%", BrownDino);
+            parseEmojii(hiddenVersion, shownText, "%2%", TallDino);
+            parseEmojii(hiddenVersion, shownText, "%3%", Rocket);
+            parseEmojii(hiddenVersion, shownText, "%4%", Moon);
+            parseEmojii(hiddenVersion, shownText, "%5%", Cresent);
+            parseEmojii(hiddenVersion, shownText, "%6%", Ring);
           }
-          Serial.print("tempHidden: ");
-          Serial.println(tempHidden);
-          int yOffset = (32 * lineCount) - 7;
-          parseEmojii(tempHidden, tempShown, "%1%", BrownDino, yOffset);
-          parseEmojii(tempHidden, tempShown, "%2%", TallDino, yOffset);
-          parseEmojii(tempHidden, tempShown, "%3%", Rocket, yOffset);
-          parseEmojii(tempHidden, tempShown, "%4%", Moon, yOffset);
-          parseEmojii(tempHidden, tempShown, "%5%", Cresent, yOffset);
-          parseEmojii(tempHidden, tempShown, "%6%", Ring, yOffset);
-          lineCount ++;
 
+          screenState = sStatic;
+          dma_display.setTextSize(2);
+          textYPosition = dma_display.height() / 2 - (FONT_SIZE * 8 / 2);
+        } else if (hiddenVersion.indexOf("\n") >= 0) {
+          screenState = sVert;
+          textYPosition = dma_display.height() + 7; // 7 to allow for Emoji
+          delayBetweeenAnimations = VERTICAL_SCROLL;
+          replaceEmojiiText("\n", "\n\n", "^^");
+          dma_display.setTextSize(2);
+
+          bool hasEmojii = replaceEmojiiText("🦖", "   ", "%1%"); // T-Rex
+          hasEmojii = replaceEmojiiText("🦕", "   ", "%2%") || hasEmojii; // Tall Dino
+          hasEmojii = replaceEmojiiText("🚀", "   ", "%3%") || hasEmojii; // Rocket
+          hasEmojii = replaceEmojiiText("🌕", "   ", "%4%") || hasEmojii; // Full Moon
+          hasEmojii = replaceEmojiiText("🌙", "   ", "%5%") || hasEmojii; // Crecent Moon
+          hasEmojii = replaceEmojiiText("🪐", "   ", "%6%") || hasEmojii; // Crecent Moon
+
+          int lineCount = 0;
+          Serial.println(hiddenVersion);
+          String hiddenTextTemp = String(hiddenVersion);
+          String visibleTextTemp = String(shownText);
+          bool keepChecking = true;
+          while (keepChecking) {
+            int endIndex = hiddenTextTemp.indexOf("^^");
+            String tempHidden;
+            String tempShown;
+            if (endIndex > 0) {
+              tempHidden = hiddenTextTemp.substring(0, endIndex);
+              tempShown = visibleTextTemp.substring(0, endIndex);
+
+              hiddenTextTemp = hiddenTextTemp.substring(endIndex + 2);
+              visibleTextTemp = visibleTextTemp.substring(endIndex + 2);
+            } else {
+              keepChecking = false;
+              tempHidden = hiddenTextTemp;
+              tempShown = visibleTextTemp;
+            }
+            Serial.print("tempHidden: ");
+            Serial.println(tempHidden);
+            int yOffset = (32 * lineCount) - 7;
+            parseEmojii(tempHidden, tempShown, "%1%", BrownDino, yOffset);
+            parseEmojii(tempHidden, tempShown, "%2%", TallDino, yOffset);
+            parseEmojii(tempHidden, tempShown, "%3%", Rocket, yOffset);
+            parseEmojii(tempHidden, tempShown, "%4%", Moon, yOffset);
+            parseEmojii(tempHidden, tempShown, "%5%", Cresent, yOffset);
+            parseEmojii(tempHidden, tempShown, "%6%", Ring, yOffset);
+            lineCount ++;
+
+          }
+
+
+        } else {
+
+          //Stripping out new line
+          replaceEmojiiText("\n", "", "");
+
+          bool hasEmojii = replaceEmojiiText("🦖", "   ", "%1%"); // T-Rex
+          hasEmojii = replaceEmojiiText("🦕", "   ", "%2%") || hasEmojii; // Tall Dino
+          hasEmojii = replaceEmojiiText("🚀", "   ", "%3%") || hasEmojii; // Rocket
+          hasEmojii = replaceEmojiiText("🌕", "   ", "%4%") || hasEmojii; // Full Moon
+          hasEmojii = replaceEmojiiText("🌙", "   ", "%5%") || hasEmojii; // Crecent Moon
+          hasEmojii = replaceEmojiiText("🪐", "   ", "%6%") || hasEmojii; // Crecent Moon
+
+          if (hasEmojii)
+          {
+            // This will extract the correct position to draw each emoji
+            parseEmojii(hiddenVersion, shownText, "%1%", BrownDino);
+            parseEmojii(hiddenVersion, shownText, "%2%", TallDino);
+            parseEmojii(hiddenVersion, shownText, "%3%", Rocket);
+            parseEmojii(hiddenVersion, shownText, "%4%", Moon);
+            parseEmojii(hiddenVersion, shownText, "%5%", Cresent);
+            parseEmojii(hiddenVersion, shownText, "%6%", Ring);
+          }
+
+          screenState = sScroll;
+          textXPosition = dma_display.width();
+          textYPosition = dma_display.height() / 2 - (FONT_SIZE * 8 / 2);
+          delayBetweeenAnimations = HORIZONTAL_SCROLL;
+          dma_display.setTextSize(FONT_SIZE);
         }
-
-
-      } else {
-
-
-        //Stripping out new line
-        replaceEmojiiText("\n", "", "");
-
-        bool hasEmojii = replaceEmojiiText("🦖", "   ", "%1%"); // T-Rex
-        hasEmojii = replaceEmojiiText("🦕", "   ", "%2%") || hasEmojii; // Tall Dino
-        hasEmojii = replaceEmojiiText("🚀", "   ", "%3%") || hasEmojii; // Rocket
-        hasEmojii = replaceEmojiiText("🌕", "   ", "%4%") || hasEmojii; // Full Moon
-        hasEmojii = replaceEmojiiText("🌙", "   ", "%5%") || hasEmojii; // Crecent Moon
-        hasEmojii = replaceEmojiiText("🪐", "   ", "%6%") || hasEmojii; // Crecent Moon
-
-        if (hasEmojii)
-        {
-          // This will extract the correct position to draw each emoji
-          parseEmojii(hiddenVersion, shownText, "%1%", BrownDino);
-          parseEmojii(hiddenVersion, shownText, "%2%", TallDino);
-          parseEmojii(hiddenVersion, shownText, "%3%", Rocket);
-          parseEmojii(hiddenVersion, shownText, "%4%", Moon);
-          parseEmojii(hiddenVersion, shownText, "%5%", Cresent);
-          parseEmojii(hiddenVersion, shownText, "%6%", Ring);
-        }
-
-        screenState = sScroll;
-        textXPosition = dma_display.width();
-        textYPosition = dma_display.height() / 2 - (FONT_SIZE * 8 / 2);
-        delayBetweeenAnimations = HORIZONTAL_SCROLL;
-        dma_display.setTextSize(FONT_SIZE);
       }
     }
   }
