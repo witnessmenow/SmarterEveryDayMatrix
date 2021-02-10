@@ -20,7 +20,9 @@
     Twitter: https://twitter.com/witnessmenow
  *******************************************************************/
 
-#include "emojiiImages.h"
+#include "emojiImages.h"
+
+#include "emojiFunctions.h"
 
 // ----------------------------
 // Standard Libraries
@@ -120,10 +122,19 @@ int scrollYMove = -1; //If positive it would scroll down (would need to adjust s
 int textXPosition = dma_display.width(); // Will start one pixel off screen
 int textYPosition = dma_display.height() / 2 - (FONT_SIZE * 8 / 2); // This will center the text
 
-String shownText = "Hi!"; //Starting Text (this can't have Emojiis at the moment!)
+String shownText = "Hi!"; //Starting Text (this can't have Emojis at the moment!)
 uint16_t textColour = myRED;
 uint16_t chartColour = myRED;
 //------- ---------------------- ------
+
+#define EMOJI_COUNT 6
+
+// T-Rex, Tall Dino, Rocket, Full Moon, Crecent Moon, Ring Planet
+
+const char emojiSymbolArray[EMOJI_COUNT][5] = {"🦖", "🦕", "🚀", "🌕", "🌙", "🪐"};
+const char emojiCodeArray[EMOJI_COUNT][4] = {"%1%", "%2%", "%3%", "%4%", "%5%", "%6%"};
+const unsigned short *emojiImageArray[EMOJI_COUNT] = {BrownDino, TallDino, Rocket, Moon, Cresent, Ring};
+
 
 // For scrolling Text
 unsigned long isAnimationDue;
@@ -143,14 +154,6 @@ enum AnimationState { sScroll, sCount, sVert, sStatic, sGoal };
 
 AnimationState screenState = sScroll;
 
-struct emojii
-{
-  int xOffset;
-  int yOffset;
-  const unsigned short *image;
-  emojii *next;
-};
-
 //callback notifying us of the need to save config
 void saveConfigCallback () {
   Serial.println("Should save config");
@@ -165,7 +168,7 @@ void setupSpiffs() {
   Serial.println("mounting FS...");
 
   // May need to make it begin(true) first time you are using SPIFFS
-  if (SPIFFS.begin()) {
+  if (SPIFFS.begin(true)) {
     Serial.println("mounted file system");
     if (SPIFFS.exists("/config.json")) {
       //file exists, reading and loading
@@ -282,10 +285,10 @@ void setup() {
 }
 
 
-void drawEmojii(int x, int y, emojii *e)
+void drawEmoji(int x, int y, emoji *e)
 {
   int xOffset = x + e->xOffset;
-  // Check if the Emojii is on the screen
+  // Check if the Emoji is on the screen
   if (xOffset > -30 && xOffset < dma_display.width())
   {
     if (y > - 30 && y < dma_display.height())
@@ -313,79 +316,15 @@ void drawEmojii(int x, int y, emojii *e)
   }
 }
 
-// Will be used in getTextBounds.
-int16_t xOne, yOne;
-uint16_t w, h;
 bool checkTelegram = false;
 bool displayReady = false;
 
-String hiddenVersion; //This string will be used to index the Emojiis
-
-int emojiiIndex = 0;
+String hiddenVersion; //This string will be used to index the Emojis
 
 int panicButtonCount = 0;
 bool panicMode = false;
 
 int wifiDownCount = 0;
-
-emojii *firstEmojii = NULL;
-emojii *currentEmojii = NULL;
-emojii *tempEmojii = NULL;
-
-
-// This function we will extract out the location of the Emojii and save it
-// to the linked list
-void parseEmojii(String stringToParse, String displayString, const char* emojiiChar, const unsigned short *emojiiImage, int yOffset = -1) {
-  emojiiIndex = 0;
-
-  emojiiIndex = stringToParse.indexOf(emojiiChar);
-  while (emojiiIndex >= 0) {
-    //Serial.println("Found");
-    if (currentEmojii == NULL) {
-      firstEmojii = new emojii;
-      currentEmojii = firstEmojii;
-    } else {
-      currentEmojii->next = new emojii;
-      tempEmojii = currentEmojii;
-      currentEmojii = currentEmojii->next;
-    }
-
-    currentEmojii->yOffset = yOffset;
-    currentEmojii->next = NULL;
-    currentEmojii->image = emojiiImage;
-
-    // Finding out where the Emojii should be
-    if (emojiiIndex == 0) {
-      currentEmojii->xOffset = 0;
-    } else {
-      dma_display.getTextBounds(displayString.substring(0, emojiiIndex), 0, 0, &xOne, &yOne, &w, &h);
-      currentEmojii->xOffset = w;
-    }
-
-    emojiiIndex = stringToParse.indexOf(emojiiChar, emojiiIndex + 1);
-  }
-}
-
-bool replaceEmojiiText(const char* emojiiChar, const char* visibleReplacement, const char* hiddenReplacement) {
-  if (hiddenVersion.indexOf(emojiiChar) >= 0) {
-    shownText.replace(emojiiChar, visibleReplacement);
-    hiddenVersion.replace(emojiiChar, hiddenReplacement);
-    return true;
-  }
-
-  return false;
-}
-
-void destroyEmojiiList() {
-  currentEmojii = firstEmojii;
-  while (currentEmojii != NULL) {
-    tempEmojii = currentEmojii;
-    currentEmojii = currentEmojii->next;
-    delete tempEmojii;
-  }
-  firstEmojii = NULL;
-}
-
 
 void loop() {
   if (!displayReady) {
@@ -440,11 +379,11 @@ void loop() {
         dma_display.fillRect(0, 2, dma_display.width(), 30, myBLACK);
 
         dma_display.print(shownText);
-        currentEmojii = firstEmojii;
-        while (currentEmojii != NULL) {
+        currentEmoji = firstEmoji;
+        while (currentEmoji != NULL) {
           //Serial.println("Meow");
-          drawEmojii(textXPosition, 2, currentEmojii);
-          currentEmojii = currentEmojii->next;
+          drawEmoji(textXPosition, 2, currentEmoji);
+          currentEmoji = currentEmoji->next;
         }
 
         displayReady = true;
@@ -474,11 +413,11 @@ void loop() {
         dma_display.fillScreen(myBLACK);
 
         dma_display.print(shownText);
-        currentEmojii = firstEmojii;
-        while (currentEmojii != NULL) {
+        currentEmoji = firstEmoji;
+        while (currentEmoji != NULL) {
           //Serial.println("Meow");
-          drawEmojii(0, textYPosition + currentEmojii->yOffset, currentEmojii);
-          currentEmojii = currentEmojii->next;
+          drawEmoji(0, textYPosition + currentEmoji->yOffset, currentEmoji);
+          currentEmoji = currentEmoji->next;
         }
 
         displayReady = true;
@@ -498,11 +437,11 @@ void loop() {
           dma_display.fillRect(0, 2, dma_display.width(), 30, myBLACK);
 
           dma_display.print(shownText);
-          currentEmojii = firstEmojii;
-          while (currentEmojii != NULL) {
+          currentEmoji = firstEmoji;
+          while (currentEmoji != NULL) {
             //Serial.println("Meow");
-            drawEmojii(textXPosition, 2, currentEmojii);
-            currentEmojii = currentEmojii->next;
+            drawEmoji(textXPosition, 2, currentEmoji);
+            currentEmoji = currentEmoji->next;
           }
 
         }
@@ -519,11 +458,11 @@ void loop() {
           dma_display.drawRect(31, 5, dma_display.width() - 62, 22, chartColour);
           dma_display.fillRect(30, 4, goalCurrent, 24, chartColour);
 
-          currentEmojii = firstEmojii;
-          while (currentEmojii != NULL) {
+          currentEmoji = firstEmoji;
+          while (currentEmoji != NULL) {
             //Serial.println("Meow");
-            drawEmojii(0, 2, currentEmojii);
-            currentEmojii = currentEmojii->next;
+            drawEmoji(0, 2, currentEmoji);
+            currentEmoji = currentEmoji->next;
           }
         }
         checkTelegram = true;
@@ -604,7 +543,7 @@ void loop() {
     Serial.print("WiFi Strength: ");
     if (WiFi.RSSI() == 0) {
       wifiDownCount++;
-      if (wifiDownCount > 5) {
+      if (wifiDownCount > 3) {
         Serial.println("Wfi seems to be disconnected, trying a restart");
         // if we still have not connected restart and try all over again
         ESP.restart();
@@ -626,8 +565,8 @@ void loop() {
       //if(bot.messages[0].chat_id == "175753388")
       if (chatIdStr == "-1" || chatIdStr == bot.messages[0].chat_id ) {
 
-        // destroy the old Emojii objects
-        destroyEmojiiList();
+        // destroy the old Emoji objects
+        destroyEmojiList();
         dma_display.fillScreen(myBLACK);
         displayReady = false;
 
@@ -649,6 +588,46 @@ void loop() {
           dma_display.setTextSize(3);
         } else if (hiddenVersion.startsWith("/goal")) {
           hiddenVersion.replace("/goal", "");
+
+          int firstEmojiRef = -1;
+          int firstEmojiIndex = -1;
+          int secondEmojiRef = -1;
+          for (int i = 0; i < EMOJI_COUNT; i++) {
+            int index = hiddenVersion.indexOf(emojiSymbolArray[i]);
+            if (index >= 0) {
+              if ( firstEmojiIndex == -1) {
+                firstEmojiIndex = index;
+                firstEmojiRef = i;
+              } else if (index < firstEmojiIndex) {
+                secondEmojiRef = firstEmojiRef;
+                firstEmojiIndex = index;
+                firstEmojiRef = i;
+              } else {
+                secondEmojiRef = i;
+              }
+            }
+          }
+
+          if (firstEmojiRef >= 0) {
+            firstEmoji = new emoji;
+            currentEmoji = firstEmoji;
+            currentEmoji->xOffset = 0;
+            currentEmoji->image = emojiImageArray[firstEmojiRef];
+            currentEmoji->next = NULL;
+
+            hiddenVersion.replace(emojiSymbolArray[firstEmojiRef], "");
+
+            if (secondEmojiRef >= 0) {
+              currentEmoji->next = new emoji;
+              currentEmoji = currentEmoji->next;
+              currentEmoji->xOffset = dma_display.width() - 30;
+              currentEmoji->image = emojiImageArray[secondEmojiRef];
+              currentEmoji->next = NULL;
+
+              hiddenVersion.replace(emojiSymbolArray[secondEmojiRef], "");
+            }
+          }
+
           int slashIndex = hiddenVersion.indexOf("/");
           if (slashIndex > 0) {
             int lower = hiddenVersion.substring(0, slashIndex).toInt();
@@ -662,16 +641,6 @@ void loop() {
               // map(value, fromLow, fromHigh, toLow, toHigh)
               goalCurrent = map(lower, 0, higher, 0, dma_display.width() - 60);
               updateFinished = false;
-
-              firstEmojii = new emojii;
-              currentEmojii = firstEmojii;
-              currentEmojii->xOffset = 0;
-              currentEmojii->image = TallDino;
-              currentEmojii->next = new emojii;
-              currentEmojii = currentEmojii->next;
-              currentEmojii->xOffset = dma_display.width() - 30;
-              currentEmojii->image = Ring;
-              currentEmojii->next = NULL;
             }
           }
         } else if (hiddenVersion.startsWith("/static")) {
@@ -687,24 +656,18 @@ void loop() {
           updateFinished = false;
 
           //Stripping out new line
-          replaceEmojiiText("\n", "", "");
+          replaceEmojiText(hiddenVersion, shownText, "\n", "", "");
 
-          bool hasEmojii = replaceEmojiiText("🦖", "   ", "%1%"); // T-Rex
-          hasEmojii = replaceEmojiiText("🦕", "   ", "%2%") || hasEmojii; // Tall Dino
-          hasEmojii = replaceEmojiiText("🚀", "   ", "%3%") || hasEmojii; // Rocket
-          hasEmojii = replaceEmojiiText("🌕", "   ", "%4%") || hasEmojii; // Full Moon
-          hasEmojii = replaceEmojiiText("🌙", "   ", "%5%") || hasEmojii; // Crecent Moon
-          hasEmojii = replaceEmojiiText("🪐", "   ", "%6%") || hasEmojii; // Ring Planet
+          bool hasEmoji = true;
+          for (int i = 0; i < EMOJI_COUNT; i++) {
+            replaceEmojiText(hiddenVersion, shownText, emojiSymbolArray[i], "   ", emojiCodeArray[i]) || hasEmoji;
+          }
 
-          if (hasEmojii)
+          if (hasEmoji)
           {
-            // This will extract the correct position to draw each emoji
-            parseEmojii(hiddenVersion, shownText, "%1%", BrownDino);
-            parseEmojii(hiddenVersion, shownText, "%2%", TallDino);
-            parseEmojii(hiddenVersion, shownText, "%3%", Rocket);
-            parseEmojii(hiddenVersion, shownText, "%4%", Moon);
-            parseEmojii(hiddenVersion, shownText, "%5%", Cresent);
-            parseEmojii(hiddenVersion, shownText, "%6%", Ring);
+            for (int i = 0; i < EMOJI_COUNT; i++) {
+              parseEmoji(hiddenVersion, shownText, emojiCodeArray[i], emojiImageArray[i], dma_display);
+            }
           }
 
           screenState = sStatic;
@@ -714,15 +677,13 @@ void loop() {
           screenState = sVert;
           textYPosition = dma_display.height() + 7; // 7 to allow for Emoji
           delayBetweeenAnimations = VERTICAL_SCROLL;
-          replaceEmojiiText("\n", "\n\n", "^^");
+          replaceEmojiText(hiddenVersion, shownText, "\n", "\n\n", "^^");
           dma_display.setTextSize(2);
 
-          bool hasEmojii = replaceEmojiiText("🦖", "   ", "%1%"); // T-Rex
-          hasEmojii = replaceEmojiiText("🦕", "   ", "%2%") || hasEmojii; // Tall Dino
-          hasEmojii = replaceEmojiiText("🚀", "   ", "%3%") || hasEmojii; // Rocket
-          hasEmojii = replaceEmojiiText("🌕", "   ", "%4%") || hasEmojii; // Full Moon
-          hasEmojii = replaceEmojiiText("🌙", "   ", "%5%") || hasEmojii; // Crecent Moon
-          hasEmojii = replaceEmojiiText("🪐", "   ", "%6%") || hasEmojii; // Crecent Moon
+          bool hasEmoji = true;
+          for (int i = 0; i < EMOJI_COUNT; i++) {
+            replaceEmojiText(hiddenVersion, shownText, emojiSymbolArray[i], "   ", emojiCodeArray[i]) || hasEmoji;
+          }
 
           int lineCount = 0;
           Serial.println(hiddenVersion);
@@ -747,12 +708,9 @@ void loop() {
             Serial.print("tempHidden: ");
             Serial.println(tempHidden);
             int yOffset = (32 * lineCount) - 7;
-            parseEmojii(tempHidden, tempShown, "%1%", BrownDino, yOffset);
-            parseEmojii(tempHidden, tempShown, "%2%", TallDino, yOffset);
-            parseEmojii(tempHidden, tempShown, "%3%", Rocket, yOffset);
-            parseEmojii(tempHidden, tempShown, "%4%", Moon, yOffset);
-            parseEmojii(tempHidden, tempShown, "%5%", Cresent, yOffset);
-            parseEmojii(tempHidden, tempShown, "%6%", Ring, yOffset);
+            for (int i = 0; i < EMOJI_COUNT; i++) {
+              parseEmoji(tempHidden, tempShown, emojiCodeArray[i], emojiImageArray[i], dma_display, yOffset);
+            }
             lineCount ++;
 
           }
@@ -761,24 +719,22 @@ void loop() {
         } else {
 
           //Stripping out new line
-          replaceEmojiiText("\n", "", "");
+          replaceEmojiText(hiddenVersion, shownText, "\n", "", "");
 
-          bool hasEmojii = replaceEmojiiText("🦖", "   ", "%1%"); // T-Rex
-          hasEmojii = replaceEmojiiText("🦕", "   ", "%2%") || hasEmojii; // Tall Dino
-          hasEmojii = replaceEmojiiText("🚀", "   ", "%3%") || hasEmojii; // Rocket
-          hasEmojii = replaceEmojiiText("🌕", "   ", "%4%") || hasEmojii; // Full Moon
-          hasEmojii = replaceEmojiiText("🌙", "   ", "%5%") || hasEmojii; // Crecent Moon
-          hasEmojii = replaceEmojiiText("🪐", "   ", "%6%") || hasEmojii; // Crecent Moon
+          bool hasEmoji = false;
+          for (int i = 0; i < EMOJI_COUNT; i++) {
+            //            Serial.print(i);
+            //            Serial.print(" ");
+            //            Serial.println(emojiSymbolArray[i]);
+            hasEmoji = replaceEmojiText(hiddenVersion, shownText, emojiSymbolArray[i], "   ", emojiCodeArray[i]) || hasEmoji;
+            //            Serial.println(hiddenVersion);
+          }
 
-          if (hasEmojii)
+          if (hasEmoji)
           {
-            // This will extract the correct position to draw each emoji
-            parseEmojii(hiddenVersion, shownText, "%1%", BrownDino);
-            parseEmojii(hiddenVersion, shownText, "%2%", TallDino);
-            parseEmojii(hiddenVersion, shownText, "%3%", Rocket);
-            parseEmojii(hiddenVersion, shownText, "%4%", Moon);
-            parseEmojii(hiddenVersion, shownText, "%5%", Cresent);
-            parseEmojii(hiddenVersion, shownText, "%6%", Ring);
+            for (int i = 0; i < EMOJI_COUNT; i++) {
+              parseEmoji(hiddenVersion, shownText, emojiCodeArray[i], emojiImageArray[i], dma_display);
+            }
           }
 
           screenState = sScroll;
