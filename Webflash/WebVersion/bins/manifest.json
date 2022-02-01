@@ -1,0 +1,27 @@
+{
+    "name": "WifiTetris",
+    "builds": [
+        {
+            "chipFamily": "ESP32",
+            "improv": false,
+            "parts": [
+                {
+                    "path": "SmarterEveryDayWeb.ino.bootloader.bin",
+                    "offset": 4096
+                },
+                {
+                    "path": "boot_app0.bin",
+                    "offset": 57344
+                },
+                {
+                    "path": "SmarterEveryDayWeb.ino.partitions.bin",
+                    "offset": 32768
+                },
+                {
+                    "path": "SmarterEveryDayWeb.ino.bin",
+                    "offset": 65536
+                }
+            ]
+        }
+    ]
+}
