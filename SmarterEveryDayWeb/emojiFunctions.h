@@ -5,6 +5,8 @@ struct emoji
   int xOffset;
   int yOffset;
   const unsigned short *image;
+  int emojiWidth;
+  int emojiHeight;
   emoji *next;
 };
 
@@ -32,6 +34,14 @@ void parseEmoji(String stringToParse, String displayString, const char* emojiCha
       tempEmoji = currentEmoji;
       currentEmoji = currentEmoji->next;
     }
+
+    if(strncmp(emojiChar, "%%7%%", 5) == 0){
+      currentEmoji->emojiWidth = 51;
+    } else {
+      currentEmoji->emojiWidth = 30;
+    }
+
+    currentEmoji->emojiHeight = 30;
 
     currentEmoji->yOffset = yOffset;
     currentEmoji->next = NULL;

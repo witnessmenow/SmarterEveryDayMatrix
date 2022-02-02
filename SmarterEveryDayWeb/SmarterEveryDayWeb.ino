@@ -85,7 +85,7 @@
 
 #define PANEL_RES_X 64      // Number of pixels wide of each INDIVIDUAL panel module. 
 #define PANEL_RES_Y 32     // Number of pixels tall of each INDIVIDUAL panel module.
-#define PANEL_CHAIN 2      // Total number of panels chained one to another
+#define PANEL_CHAIN 4      // Total number of panels chained one to another
 
 //------- ---------------------- ------
 
@@ -132,13 +132,13 @@ uint16_t textColour = myRED;
 uint16_t chartColour = myRED;
 //------- ---------------------- ------
 
-#define EMOJI_NUM_TYPES 6
+#define EMOJI_NUM_TYPES 7
 
-// T-Rex, Tall Dino, Rocket, Full Moon, Crecent Moon, Ring Planet
+// T-Rex, Tall Dino, Rocket, Full Moon, Crecent Moon, Ring Planet, scope
 
-const char emojiSymbolArray[EMOJI_NUM_TYPES][5] = {"🦖", "🦕", "🚀", "🌕", "🌙", "🪐"};
-const char emojiCodeArray[EMOJI_NUM_TYPES][4] = {"%1%", "%2%", "%3%", "%4%", "%5%", "%6%"};
-const unsigned short *emojiImageArray[EMOJI_NUM_TYPES] = {BrownDino, TallDino, Rocket, Moon, Cresent, Ring};
+const char emojiSymbolArray[EMOJI_NUM_TYPES][5] = {"🦖", "🦕", "🚀", "🌕", "🌙", "🪐", "🔭"};
+const char emojiCodeArray[EMOJI_NUM_TYPES][6] = {"%1%", "%2%", "%3%", "%4%", "%5%", "%6%", "%%7%%"};
+const unsigned short *emojiImageArray[EMOJI_NUM_TYPES] = {BrownDino, TallDino, Rocket, Moon, Cresent, Ring, webbSmall};
 
 
 // For scrolling Text
@@ -335,17 +335,17 @@ void drawEmoji(int x, int y, emoji *e)
 {
   int xOffset = x + e->xOffset;
   // Check if the Emoji is on the screen
-  if (xOffset > -30 && xOffset < dma_display->width())
+  if (xOffset > - (e->emojiWidth) && xOffset < dma_display->width())
   {
-    if (y > - 30 && y < dma_display->height())
+    if (y > - (e->emojiHeight) && y < dma_display->height())
     {
       int arrayIndex;
-      for (int i = 0; i < 30; i++)
+      for (int i = 0; i < e->emojiHeight; i++)
       {
         //    Serial.print("I: ");
         //    Serial.print(i);
-        arrayIndex = i * 30;
-        for (int j = 0; j < 30; j++) {
+        arrayIndex = i * e->emojiWidth;
+        for (int j = 0; j < e->emojiWidth; j++) {
 
           // If this pixel is black, no need to draw it
           if (e->image[arrayIndex + j] > 0) // Don't need to draw black
@@ -378,9 +378,15 @@ void processEmoji() {
     //            Serial.print(i);
     //            Serial.print(" ");
     //            Serial.println(emojiSymbolArray[i]);
-    hasEmoji = replaceEmojiText(hiddenVersion, shownText, emojiSymbolArray[i], "   ", emojiCodeArray[i]) || hasEmoji;
+    if (i == 6) {
+      // Extra Spacing for Webb
+      hasEmoji = replaceEmojiText(hiddenVersion, shownText, emojiSymbolArray[i], "     ", emojiCodeArray[i]) || hasEmoji;
+    } else {
+      hasEmoji = replaceEmojiText(hiddenVersion, shownText, emojiSymbolArray[i], "   ", emojiCodeArray[i]) || hasEmoji;
+    }
     //            Serial.println(hiddenVersion);
   }
+
 
   if (hasEmoji)
   {
@@ -462,18 +468,38 @@ void prepareCountDownAnimation(String number) {
 void prepareGoalAnimation(int lower, int higher, int firstEmojiIndex = -1, int secondEmojiIndex = -1) {
 
   prepareAnimationStart();
+  int emojiSpace = 0;
   if (firstEmojiIndex >= 0) {
     firstEmoji = new emoji;
     currentEmoji = firstEmoji;
     currentEmoji->xOffset = 0;
     currentEmoji->image = emojiImageArray[firstEmojiIndex];
     currentEmoji->next = NULL;
+    if (firstEmojiIndex == 6) {
+      currentEmoji->emojiWidth = 51;
+    } else {
+      currentEmoji->emojiWidth = 30;
+    }
+
+    currentEmoji->emojiHeight = 30;
+
+    emojiSpace = emojiSpace + currentEmoji->emojiWidth;
   }
 
   if (secondEmojiIndex >= 0) {
     currentEmoji->next = new emoji;
     currentEmoji = currentEmoji->next;
-    currentEmoji->xOffset = dma_display->width() - 30;
+
+    if (secondEmojiIndex == 6) {
+      currentEmoji->emojiWidth = 51;
+    } else {
+      currentEmoji->emojiWidth = 30;
+    }
+    currentEmoji->emojiHeight = 30;
+
+    emojiSpace = emojiSpace + currentEmoji->emojiWidth;
+
+    currentEmoji->xOffset = dma_display->width() - currentEmoji->emojiWidth;
     currentEmoji->image = emojiImageArray[secondEmojiIndex];
     currentEmoji->next = NULL;
   }
@@ -485,7 +511,7 @@ void prepareGoalAnimation(int lower, int higher, int firstEmojiIndex = -1, int s
   if (lower <= higher) {
     screenState = sGoal;
     // map(value, fromLow, fromHigh, toLow, toHigh)
-    goalCurrent = map(lower, 0, higher, 0, dma_display->width() - 60);
+    goalCurrent = map(lower, 0, higher, 0, dma_display->width() - emojiSpace);
     updateFinished = false;
   }
 }
@@ -533,7 +559,7 @@ void handleGoal() {
   if (temp != "") {
     secondEmojiIndex = temp.toInt();
   }
-  
+
   prepareGoalAnimation(lower, higher, firstEmojiIndex, secondEmojiIndex);
 
 
@@ -665,12 +691,31 @@ void loop() {
 
       case sGoal:
 
+
         if (!updateFinished)
         {
+          int leftOffset = 0;
+          int rightOffset = 0;
+
+          // Left Emoji
+          if(firstEmoji != NULL)
+          {
+            
+            drawEmoji(0, 2, firstEmoji);
+            leftOffset = firstEmoji->emojiWidth;
+
+            //Check for Right Emoji
+            if(firstEmoji->next != NULL){
+              currentEmoji = firstEmoji->next;
+              drawEmoji(0, 2, currentEmoji);
+              rightOffset = currentEmoji->emojiWidth;
+            }
+          }
+
           dma_display->fillScreen(myBLACK);
-          dma_display->drawRect(30, 4, dma_display->width() - 60, 24, chartColour);
-          dma_display->drawRect(31, 5, dma_display->width() - 62, 22, chartColour);
-          dma_display->fillRect(30, 4, goalCurrent, 24, chartColour);
+          dma_display->drawRect(leftOffset, 4, dma_display->width() - (leftOffset+rightOffset), 24, chartColour);
+          dma_display->drawRect(leftOffset+1, 5, dma_display->width() - (leftOffset+rightOffset+2), 22, chartColour);
+          dma_display->fillRect(leftOffset, 4, goalCurrent, 24, chartColour);
 
           currentEmoji = firstEmoji;
           while (currentEmoji != NULL) {
@@ -718,31 +763,31 @@ void loop() {
   unsigned long lastPanicButtonTimer;
   unsigned long panicButtonTotal;
   now = millis();
-
-  if (digitalRead(BUTTON_PIN) == LOW) {
-    if (!panicMode)
-    {
-      panicButtonTotal = panicButtonTotal + (now - lastPanicButtonTimer);
-      if (panicButtonTotal > 3000) {
-        // we are panic-in skywalker
-        panicMode = true;
-        Serial.println("We are panic-in Skywalker right now");
-
-        //Set the display to countdown for 5 seconds
-        countDownValue = 6;
-        secondCountDown = 0; // will trigger straight away
-
-        lastDisplayedCount = -1;
-
-        screenState = sCount;
-        dma_display->setTextSize(3);
-        panicButtonTotal = 0;
-      }
-    }
-  } else {
-    panicButtonTotal = 0;
-    panicMode = false;
-  }
+  //
+  //  if (digitalRead(BUTTON_PIN) == LOW) {
+  //    if (!panicMode)
+  //    {
+  //      panicButtonTotal = panicButtonTotal + (now - lastPanicButtonTimer);
+  //      if (panicButtonTotal > 3000) {
+  //        // we are panic-in skywalker
+  //        panicMode = true;
+  //        Serial.println("We are panic-in Skywalker right now");
+  //
+  //        //Set the display to countdown for 5 seconds
+  //        countDownValue = 6;
+  //        secondCountDown = 0; // will trigger straight away
+  //
+  //        lastDisplayedCount = -1;
+  //
+  //        screenState = sCount;
+  //        dma_display->setTextSize(3);
+  //        panicButtonTotal = 0;
+  //      }
+  //    }
+  //  } else {
+  //    panicButtonTotal = 0;
+  //    panicMode = false;
+  //  }
 
   server.handleClient();
 
