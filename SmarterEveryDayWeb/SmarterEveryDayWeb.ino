@@ -51,11 +51,6 @@
 // Can be installed from the library manager (Search for "ESP32 MATRIX DMA")
 // https://github.com/mrfaptastic/ESP32-HUB75-MatrixPanel-I2S-DMA
 
-#include <ArduinoJson.h>
-// ArduinoJson is used for reading from config
-// Search for "Arduino Json" in the Arduino Library manager
-// https://github.com/bblanchon/ArduinoJson
-
 // ----------------------------
 // Dependancy Libraries - each one of these will need to be installed.
 // ----------------------------
@@ -162,49 +157,6 @@ enum AnimationState { sScroll, sCount, sVert, sStatic, sGoal };
 
 AnimationState screenState = sScroll;
 
-//callback notifying us of the need to save config
-void saveConfigCallback () {
-  Serial.println("Should save config");
-  shouldSaveConfig = true;
-}
-
-void setupSpiffs() {
-  //clean FS, for testing
-  // SPIFFS.format();
-
-  //read configuration from FS json
-  Serial.println("mounting FS...");
-
-  // May need to make it begin(true) first time you are using SPIFFS
-  if (SPIFFS.begin(true)) {
-    Serial.println("mounted file system");
-    if (SPIFFS.exists("/config.json")) {
-      //file exists, reading and loading
-      Serial.println("reading config file");
-      File configFile = SPIFFS.open("/config.json", "r");
-      if (configFile) {
-        Serial.println("opened config file");
-        StaticJsonDocument<512> json;
-        DeserializationError error = deserializeJson(json, configFile);
-        serializeJsonPretty(json, Serial);
-        if (!error) {
-          Serial.println("\nparsed json");
-
-          strcpy(botToken, json["botToken"]);
-          strcpy(chatId, json["chatId"]);
-          strcpy(scrollSpeed, json["scrollSpeed"]);
-
-        } else {
-          Serial.println("failed to load json config");
-        }
-      }
-    }
-  } else {
-    Serial.println("failed to mount FS");
-  }
-  //end read
-}
-
 void configDisplay() {
   HUB75_I2S_CFG mxconfig(
     PANEL_RES_X,   // module width
@@ -246,21 +198,7 @@ void setup() {
 
   Serial.begin(115200);
 
-  setupSpiffs();
-
   WiFiManager wm;
-
-  //set config save notify callback
-  wm.setSaveConfigCallback(saveConfigCallback);
-
-  WiFiManagerParameter custom_bot_token("botToken", "Bot Token", botToken, 60);
-  WiFiManagerParameter custom_chat_id("chatId", "Chat Id", chatId, 20);
-  WiFiManagerParameter custom_scroll_speed("scrollSpeed", "Scroll Speed", scrollSpeed, 3);
-
-  //add all your parameters here
-  wm.addParameter(&custom_bot_token);
-  wm.addParameter(&custom_chat_id);
-  wm.addParameter(&custom_scroll_speed);
 
   //reset settings - wipe credentials for testing
   //wm.resetSettings();
@@ -271,49 +209,12 @@ void setup() {
   dma_display->setTextWrap(false); // N.B!! Don't wrap at end of line
   dma_display->setTextColor(textColour); // Can change the colour here
 
-  if (digitalRead(BUTTON_PIN) == LOW) {
-    Serial.println("Entering Forced Config Mode");
-    if (!wm.startConfigPortal("SmarterDisplay", "everyday")) {
-      Serial.println("failed to connect and hit timeout");
-      delay(3000);
-      //reset and try again, or maybe put it to deep sleep
-      ESP.restart();
-      delay(5000);
-    }
-  } else {
-    if (!wm.autoConnect("SmarterDisplay", "everyday")) {
-      Serial.println("failed to connect and hit timeout");
-      delay(3000);
-      // if we still have not connected restart and try all over again
-      ESP.restart();
-      delay(5000);
-    }
-  }
-
-  //save the custom parameters to FS
-  if (shouldSaveConfig) {
-    Serial.println("saving config");
-
-    strcpy(botToken, custom_bot_token.getValue());
-    strcpy(chatId, custom_chat_id.getValue());
-    strcpy(scrollSpeed, custom_scroll_speed.getValue());
-    DynamicJsonDocument  json(200);
-    json["botToken"] = botToken;
-    json["chatId"]   = chatId;
-    json["scrollSpeed"]   = scrollSpeed;
-
-    File configFile = SPIFFS.open("/config.json", "w");
-    if (!configFile) {
-      Serial.println("failed to open config file for writing");
-    }
-
-    serializeJsonPretty(json, Serial);
-    if (serializeJson(json, configFile) == 0) {
-      Serial.println(F("Failed to write to file"));
-    }
-    configFile.close();
-    //end save
-    shouldSaveConfig = false;
+  if (!wm.autoConnect("SmarterDisplay", "everyday")) {
+    Serial.println("failed to connect and hit timeout");
+    delay(3000);
+    // if we still have not connected restart and try all over again
+    ESP.restart();
+    delay(5000);
   }
 
   Serial.print("\nWiFi connected. IP address: ");
@@ -698,14 +599,14 @@ void loop() {
           int rightOffset = 0;
 
           // Left Emoji
-          if(firstEmoji != NULL)
+          if (firstEmoji != NULL)
           {
-            
+
             drawEmoji(0, 2, firstEmoji);
             leftOffset = firstEmoji->emojiWidth;
 
             //Check for Right Emoji
-            if(firstEmoji->next != NULL){
+            if (firstEmoji->next != NULL) {
               currentEmoji = firstEmoji->next;
               drawEmoji(0, 2, currentEmoji);
               rightOffset = currentEmoji->emojiWidth;
@@ -713,8 +614,8 @@ void loop() {
           }
 
           dma_display->fillScreen(myBLACK);
-          dma_display->drawRect(leftOffset, 4, dma_display->width() - (leftOffset+rightOffset), 24, chartColour);
-          dma_display->drawRect(leftOffset+1, 5, dma_display->width() - (leftOffset+rightOffset+2), 22, chartColour);
+          dma_display->drawRect(leftOffset, 4, dma_display->width() - (leftOffset + rightOffset), 24, chartColour);
+          dma_display->drawRect(leftOffset + 1, 5, dma_display->width() - (leftOffset + rightOffset + 2), 22, chartColour);
           dma_display->fillRect(leftOffset, 4, goalCurrent, 24, chartColour);
 
           currentEmoji = firstEmoji;
