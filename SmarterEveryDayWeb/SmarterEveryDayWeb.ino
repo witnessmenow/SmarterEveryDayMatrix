@@ -80,7 +80,7 @@
 
 #define PANEL_RES_X 64      // Number of pixels wide of each INDIVIDUAL panel module. 
 #define PANEL_RES_Y 32     // Number of pixels tall of each INDIVIDUAL panel module.
-#define PANEL_CHAIN 2      // Total number of panels chained one to another
+#define PANEL_CHAIN 4      // Total number of panels chained one to another
 
 //------- ---------------------- ------
 
