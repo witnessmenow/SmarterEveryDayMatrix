@@ -80,7 +80,7 @@
 
 #define PANEL_RES_X 64      // Number of pixels wide of each INDIVIDUAL panel module. 
 #define PANEL_RES_Y 32     // Number of pixels tall of each INDIVIDUAL panel module.
-#define PANEL_CHAIN 4      // Total number of panels chained one to another
+#define PANEL_CHAIN 2      // Total number of panels chained one to another
 
 //------- ---------------------- ------
 
@@ -151,6 +151,16 @@ int lastDisplayedCount;
 
 bool updateFinished = true;
 
+bool checkTelegram = false;
+bool displayReadyForDraw = false;
+
+String hiddenVersion; //This string will be used to index the Emojis
+
+int panicButtonCount = 0;
+bool panicMode = false;
+
+int wifiDownCount = 0;
+
 int goalCurrent = 0;
 
 enum AnimationState { sScroll, sCount, sVert, sStatic, sGoal };
@@ -184,6 +194,203 @@ void configDisplay() {
 const char *webpage =
 #include "webPage.h"
   ;
+
+void displayDriver(void * parameter) {
+  while (true) {
+
+    if (!displayReadyForDraw) {
+
+      // Because we are using a double buffer, we don't need to wait
+      // for when the animation is due before drawing it to the buffer
+      // it will only get swapped onto the display when the animation is due.
+
+
+      switch ( screenState) {
+        case sCount:
+          {
+            unsigned long countNow = millis();
+            if (countNow > secondCountDown)
+            {
+              if (countDownValue > 0)
+              {
+                countDownValue--;
+                secondCountDown = countNow + 1000;
+
+                // Get the bounds of the text
+                dma_display->getTextBounds(String(countDownValue), 0, 0, &xOne, &yOne, &w, &h);
+
+                // Set the cursor to center it
+                dma_display->setCursor(dma_display->width() / 2 - w / 2 + 1, 4);
+                dma_display->fillScreen(myBLACK);
+                dma_display->print(countDownValue);
+              } else {
+                checkTelegram = true;
+              }
+            }
+            displayReadyForDraw = true;
+            break;
+          }
+        case sScroll:
+
+          // Update X position of text
+          textXPosition += scrollXMove;
+
+          // Checking if the end of the text is off screen to the left
+          dma_display->getTextBounds(shownText, textXPosition, textYPosition, &xOne, &yOne, &w, &h);
+          if (textXPosition + w <= 0)
+          {
+            checkTelegram = true;
+
+            // Reset text to scroll again
+            textXPosition = dma_display->width();
+          }
+
+          dma_display->setCursor(textXPosition, textYPosition);
+
+          dma_display->fillRect(0, 2, dma_display->width(), 30, myBLACK);
+
+          dma_display->print(shownText);
+          currentEmoji = firstEmoji;
+          while (currentEmoji != NULL) {
+            //Serial.println("Meow");
+            drawEmoji(textXPosition, 2, currentEmoji);
+            currentEmoji = currentEmoji->next;
+          }
+
+          displayReadyForDraw = true;
+          break;
+
+        case sVert:
+
+          // Update Y position of text
+          textYPosition += scrollYMove;
+
+          // Checking if the end of the text is off screen to the left
+          dma_display->getTextBounds(shownText, 0, textYPosition + 8, &xOne, &yOne, &w, &h);
+          //Serial.print("Vert Check: ");
+          //Serial.println(textYPosition + h);
+          if (textYPosition + h + 7 <= 0)
+          {
+            checkTelegram = true;
+
+            // Reset text to scroll again
+            textYPosition = dma_display->height() + 7;
+          }
+
+          //textXPosition = (dma_display->width() / 2) - (w / 2) + 1;
+
+          dma_display->setCursor(0, textYPosition);
+
+          dma_display->fillScreen(myBLACK);
+
+          dma_display->print(shownText);
+          currentEmoji = firstEmoji;
+          while (currentEmoji != NULL) {
+            //Serial.println("Meow");
+            drawEmoji(0, textYPosition + currentEmoji->yOffset, currentEmoji);
+            currentEmoji = currentEmoji->next;
+          }
+
+          displayReadyForDraw = true;
+          break;
+
+        case sStatic:
+
+          if (!updateFinished)
+          {
+            // Checking if the end of the text is off screen to the left
+            dma_display->getTextBounds(shownText, textXPosition, textYPosition, &xOne, &yOne, &w, &h);
+
+            textXPosition = dma_display->width() / 2 - w / 2 + 1;
+
+            dma_display->setCursor(textXPosition, textYPosition);
+
+            dma_display->fillRect(0, 2, dma_display->width(), 30, myBLACK);
+
+            dma_display->print(shownText);
+            currentEmoji = firstEmoji;
+            while (currentEmoji != NULL) {
+              //Serial.println("Meow");
+              drawEmoji(textXPosition, 2, currentEmoji);
+              currentEmoji = currentEmoji->next;
+            }
+
+          }
+          checkTelegram = true;
+          displayReadyForDraw = true;
+          break;
+
+        case sGoal:
+
+
+          if (!updateFinished)
+          {
+            int leftOffset = 0;
+            int rightOffset = 0;
+
+            // Left Emoji
+            if (firstEmoji != NULL)
+            {
+
+              drawEmoji(0, 2, firstEmoji);
+              leftOffset = firstEmoji->emojiWidth;
+
+              //Check for Right Emoji
+              if (firstEmoji->next != NULL) {
+                currentEmoji = firstEmoji->next;
+                drawEmoji(0, 2, currentEmoji);
+                rightOffset = currentEmoji->emojiWidth;
+              }
+            }
+
+            dma_display->fillScreen(myBLACK);
+            dma_display->drawRect(leftOffset, 4, dma_display->width() - (leftOffset + rightOffset), 24, chartColour);
+            dma_display->drawRect(leftOffset + 1, 5, dma_display->width() - (leftOffset + rightOffset + 2), 22, chartColour);
+            dma_display->fillRect(leftOffset, 4, goalCurrent, 24, chartColour);
+
+            currentEmoji = firstEmoji;
+            while (currentEmoji != NULL) {
+              //Serial.println("Meow");
+              drawEmoji(0, 2, currentEmoji);
+              currentEmoji = currentEmoji->next;
+            }
+          }
+          checkTelegram = true;
+          displayReadyForDraw = true;
+          break;
+      }
+
+    }
+
+    unsigned long now = millis();
+    if (now > isAnimationDue)
+    {
+      // This sets the timer for when we should scroll again.
+      isAnimationDue = now + delayBetweeenAnimations;
+
+      if (screenState == sCount && lastDisplayedCount == countDownValue) {
+        // No need to display
+      } else if (screenState == sStatic && updateFinished) {
+        // No need to display
+      } else if (screenState == sGoal && updateFinished) {
+        // No need to display
+      } else {
+        if (screenState == sCount)
+        {
+          lastDisplayedCount = countDownValue;
+        }
+        if (screenState == sStatic || screenState == sGoal) {
+          updateFinished = true;
+        }
+
+        // This code swaps the second buffer to be visible (puts it on the display)
+        dma_display->flipDMABuffer();
+      }
+
+      displayReadyForDraw = false;
+    }
+  }
+}
 
 void handleRoot() {
 
@@ -232,10 +439,20 @@ void setup() {
 
   shownText = WiFi.localIP().toString();
 
+  xTaskCreatePinnedToCore(
+    displayDriver,          // Function that should be called
+    "Display Driver",     // Name of the task (for debugging)
+    10000,              // Stack size (bytes)
+    NULL,               // Parameter to pass
+    1,                  // Task priority
+    NULL,               // Task handle
+    1                   // Core you want to run the task on (0 or 1)
+  );
+
 }
 
 
-void drawEmoji(int x, int y, emoji *e)
+void drawEmoji(int x, int y, emoji * e)
 {
   int xOffset = x + e->xOffset;
   // Check if the Emoji is on the screen
@@ -265,16 +482,6 @@ void drawEmoji(int x, int y, emoji *e)
     }
   }
 }
-
-bool checkTelegram = false;
-bool displayReadyForDraw = false;
-
-String hiddenVersion; //This string will be used to index the Emojis
-
-int panicButtonCount = 0;
-bool panicMode = false;
-
-int wifiDownCount = 0;
 
 void processEmoji() {
   bool hasEmoji = false;
@@ -531,202 +738,202 @@ void handleVertical() {
 
 
 void loop() {
-  if (!displayReadyForDraw) {
+  //  if (!displayReadyForDraw) {
+  //
+  //    // Because we are using a double buffer, we don't need to wait
+  //    // for when the animation is due before drawing it to the buffer
+  //    // it will only get swapped onto the display when the animation is due.
+  //
+  //
+  //    switch ( screenState) {
+  //      case sCount:
+  //        {
+  //          unsigned long countNow = millis();
+  //          if (countNow > secondCountDown)
+  //          {
+  //            if (countDownValue > 0)
+  //            {
+  //              countDownValue--;
+  //              secondCountDown = countNow + 1000;
+  //
+  //              // Get the bounds of the text
+  //              dma_display->getTextBounds(String(countDownValue), 0, 0, &xOne, &yOne, &w, &h);
+  //
+  //              // Set the cursor to center it
+  //              dma_display->setCursor(dma_display->width() / 2 - w / 2 + 1, 4);
+  //              dma_display->fillScreen(myBLACK);
+  //              dma_display->print(countDownValue);
+  //            } else {
+  //              checkTelegram = true;
+  //            }
+  //          }
+  //          displayReadyForDraw = true;
+  //          break;
+  //        }
+  //      case sScroll:
+  //
+  //        // Update X position of text
+  //        textXPosition += scrollXMove;
+  //
+  //        // Checking if the end of the text is off screen to the left
+  //        dma_display->getTextBounds(shownText, textXPosition, textYPosition, &xOne, &yOne, &w, &h);
+  //        if (textXPosition + w <= 0)
+  //        {
+  //          checkTelegram = true;
+  //
+  //          // Reset text to scroll again
+  //          textXPosition = dma_display->width();
+  //        }
+  //
+  //        dma_display->setCursor(textXPosition, textYPosition);
+  //
+  //        dma_display->fillRect(0, 2, dma_display->width(), 30, myBLACK);
+  //
+  //        dma_display->print(shownText);
+  //        currentEmoji = firstEmoji;
+  //        while (currentEmoji != NULL) {
+  //          //Serial.println("Meow");
+  //          drawEmoji(textXPosition, 2, currentEmoji);
+  //          currentEmoji = currentEmoji->next;
+  //        }
+  //
+  //        displayReadyForDraw = true;
+  //        break;
+  //
+  //      case sVert:
+  //
+  //        // Update Y position of text
+  //        textYPosition += scrollYMove;
+  //
+  //        // Checking if the end of the text is off screen to the left
+  //        dma_display->getTextBounds(shownText, 0, textYPosition + 8, &xOne, &yOne, &w, &h);
+  //        //Serial.print("Vert Check: ");
+  //        //Serial.println(textYPosition + h);
+  //        if (textYPosition + h + 7 <= 0)
+  //        {
+  //          checkTelegram = true;
+  //
+  //          // Reset text to scroll again
+  //          textYPosition = dma_display->height() + 7;
+  //        }
+  //
+  //        //textXPosition = (dma_display->width() / 2) - (w / 2) + 1;
+  //
+  //        dma_display->setCursor(0, textYPosition);
+  //
+  //        dma_display->fillScreen(myBLACK);
+  //
+  //        dma_display->print(shownText);
+  //        currentEmoji = firstEmoji;
+  //        while (currentEmoji != NULL) {
+  //          //Serial.println("Meow");
+  //          drawEmoji(0, textYPosition + currentEmoji->yOffset, currentEmoji);
+  //          currentEmoji = currentEmoji->next;
+  //        }
+  //
+  //        displayReadyForDraw = true;
+  //        break;
+  //
+  //      case sStatic:
+  //
+  //        if (!updateFinished)
+  //        {
+  //          // Checking if the end of the text is off screen to the left
+  //          dma_display->getTextBounds(shownText, textXPosition, textYPosition, &xOne, &yOne, &w, &h);
+  //
+  //          textXPosition = dma_display->width() / 2 - w / 2 + 1;
+  //
+  //          dma_display->setCursor(textXPosition, textYPosition);
+  //
+  //          dma_display->fillRect(0, 2, dma_display->width(), 30, myBLACK);
+  //
+  //          dma_display->print(shownText);
+  //          currentEmoji = firstEmoji;
+  //          while (currentEmoji != NULL) {
+  //            //Serial.println("Meow");
+  //            drawEmoji(textXPosition, 2, currentEmoji);
+  //            currentEmoji = currentEmoji->next;
+  //          }
+  //
+  //        }
+  //        checkTelegram = true;
+  //        displayReadyForDraw = true;
+  //        break;
+  //
+  //      case sGoal:
+  //
+  //
+  //        if (!updateFinished)
+  //        {
+  //          int leftOffset = 0;
+  //          int rightOffset = 0;
+  //
+  //          // Left Emoji
+  //          if (firstEmoji != NULL)
+  //          {
+  //
+  //            drawEmoji(0, 2, firstEmoji);
+  //            leftOffset = firstEmoji->emojiWidth;
+  //
+  //            //Check for Right Emoji
+  //            if (firstEmoji->next != NULL) {
+  //              currentEmoji = firstEmoji->next;
+  //              drawEmoji(0, 2, currentEmoji);
+  //              rightOffset = currentEmoji->emojiWidth;
+  //            }
+  //          }
+  //
+  //          dma_display->fillScreen(myBLACK);
+  //          dma_display->drawRect(leftOffset, 4, dma_display->width() - (leftOffset + rightOffset), 24, chartColour);
+  //          dma_display->drawRect(leftOffset + 1, 5, dma_display->width() - (leftOffset + rightOffset + 2), 22, chartColour);
+  //          dma_display->fillRect(leftOffset, 4, goalCurrent, 24, chartColour);
+  //
+  //          currentEmoji = firstEmoji;
+  //          while (currentEmoji != NULL) {
+  //            //Serial.println("Meow");
+  //            drawEmoji(0, 2, currentEmoji);
+  //            currentEmoji = currentEmoji->next;
+  //          }
+  //        }
+  //        checkTelegram = true;
+  //        displayReadyForDraw = true;
+  //        break;
+  //    }
+  //
+  //  }
 
-    // Because we are using a double buffer, we don't need to wait
-    // for when the animation is due before drawing it to the buffer
-    // it will only get swapped onto the display when the animation is due.
-
-
-    switch ( screenState) {
-      case sCount:
-        {
-          unsigned long countNow = millis();
-          if (countNow > secondCountDown)
-          {
-            if (countDownValue > 0)
-            {
-              countDownValue--;
-              secondCountDown = countNow + 1000;
-
-              // Get the bounds of the text
-              dma_display->getTextBounds(String(countDownValue), 0, 0, &xOne, &yOne, &w, &h);
-
-              // Set the cursor to center it
-              dma_display->setCursor(dma_display->width() / 2 - w / 2 + 1, 4);
-              dma_display->fillScreen(myBLACK);
-              dma_display->print(countDownValue);
-            } else {
-              checkTelegram = true;
-            }
-          }
-          displayReadyForDraw = true;
-          break;
-        }
-      case sScroll:
-
-        // Update X position of text
-        textXPosition += scrollXMove;
-
-        // Checking if the end of the text is off screen to the left
-        dma_display->getTextBounds(shownText, textXPosition, textYPosition, &xOne, &yOne, &w, &h);
-        if (textXPosition + w <= 0)
-        {
-          checkTelegram = true;
-
-          // Reset text to scroll again
-          textXPosition = dma_display->width();
-        }
-
-        dma_display->setCursor(textXPosition, textYPosition);
-
-        dma_display->fillRect(0, 2, dma_display->width(), 30, myBLACK);
-
-        dma_display->print(shownText);
-        currentEmoji = firstEmoji;
-        while (currentEmoji != NULL) {
-          //Serial.println("Meow");
-          drawEmoji(textXPosition, 2, currentEmoji);
-          currentEmoji = currentEmoji->next;
-        }
-
-        displayReadyForDraw = true;
-        break;
-
-      case sVert:
-
-        // Update Y position of text
-        textYPosition += scrollYMove;
-
-        // Checking if the end of the text is off screen to the left
-        dma_display->getTextBounds(shownText, 0, textYPosition + 8, &xOne, &yOne, &w, &h);
-        //Serial.print("Vert Check: ");
-        //Serial.println(textYPosition + h);
-        if (textYPosition + h + 7 <= 0)
-        {
-          checkTelegram = true;
-
-          // Reset text to scroll again
-          textYPosition = dma_display->height() + 7;
-        }
-
-        //textXPosition = (dma_display->width() / 2) - (w / 2) + 1;
-
-        dma_display->setCursor(0, textYPosition);
-
-        dma_display->fillScreen(myBLACK);
-
-        dma_display->print(shownText);
-        currentEmoji = firstEmoji;
-        while (currentEmoji != NULL) {
-          //Serial.println("Meow");
-          drawEmoji(0, textYPosition + currentEmoji->yOffset, currentEmoji);
-          currentEmoji = currentEmoji->next;
-        }
-
-        displayReadyForDraw = true;
-        break;
-
-      case sStatic:
-
-        if (!updateFinished)
-        {
-          // Checking if the end of the text is off screen to the left
-          dma_display->getTextBounds(shownText, textXPosition, textYPosition, &xOne, &yOne, &w, &h);
-
-          textXPosition = dma_display->width() / 2 - w / 2 + 1;
-
-          dma_display->setCursor(textXPosition, textYPosition);
-
-          dma_display->fillRect(0, 2, dma_display->width(), 30, myBLACK);
-
-          dma_display->print(shownText);
-          currentEmoji = firstEmoji;
-          while (currentEmoji != NULL) {
-            //Serial.println("Meow");
-            drawEmoji(textXPosition, 2, currentEmoji);
-            currentEmoji = currentEmoji->next;
-          }
-
-        }
-        checkTelegram = true;
-        displayReadyForDraw = true;
-        break;
-
-      case sGoal:
-
-
-        if (!updateFinished)
-        {
-          int leftOffset = 0;
-          int rightOffset = 0;
-
-          // Left Emoji
-          if (firstEmoji != NULL)
-          {
-
-            drawEmoji(0, 2, firstEmoji);
-            leftOffset = firstEmoji->emojiWidth;
-
-            //Check for Right Emoji
-            if (firstEmoji->next != NULL) {
-              currentEmoji = firstEmoji->next;
-              drawEmoji(0, 2, currentEmoji);
-              rightOffset = currentEmoji->emojiWidth;
-            }
-          }
-
-          dma_display->fillScreen(myBLACK);
-          dma_display->drawRect(leftOffset, 4, dma_display->width() - (leftOffset + rightOffset), 24, chartColour);
-          dma_display->drawRect(leftOffset + 1, 5, dma_display->width() - (leftOffset + rightOffset + 2), 22, chartColour);
-          dma_display->fillRect(leftOffset, 4, goalCurrent, 24, chartColour);
-
-          currentEmoji = firstEmoji;
-          while (currentEmoji != NULL) {
-            //Serial.println("Meow");
-            drawEmoji(0, 2, currentEmoji);
-            currentEmoji = currentEmoji->next;
-          }
-        }
-        checkTelegram = true;
-        displayReadyForDraw = true;
-        break;
-    }
-
-  }
-
-  unsigned long now = millis();
-  if (now > isAnimationDue)
-  {
-    // This sets the timer for when we should scroll again.
-    isAnimationDue = now + delayBetweeenAnimations;
-
-    if (screenState == sCount && lastDisplayedCount == countDownValue) {
-      // No need to display
-    } else if (screenState == sStatic && updateFinished) {
-      // No need to display
-    } else if (screenState == sGoal && updateFinished) {
-      // No need to display
-    } else {
-      if (screenState == sCount)
-      {
-        lastDisplayedCount = countDownValue;
-      }
-      if (screenState == sStatic || screenState == sGoal) {
-        updateFinished = true;
-      }
-
-      // This code swaps the second buffer to be visible (puts it on the display)
-      dma_display->flipDMABuffer();
-    }
-
-    displayReadyForDraw = false;
-
-  }
+  //  unsigned long now = millis();
+  //  if (now > isAnimationDue)
+  //  {
+  //    // This sets the timer for when we should scroll again.
+  //    isAnimationDue = now + delayBetweeenAnimations;
+  //
+  //    if (screenState == sCount && lastDisplayedCount == countDownValue) {
+  //      // No need to display
+  //    } else if (screenState == sStatic && updateFinished) {
+  //      // No need to display
+  //    } else if (screenState == sGoal && updateFinished) {
+  //      // No need to display
+  //    } else {
+  //      if (screenState == sCount)
+  //      {
+  //        lastDisplayedCount = countDownValue;
+  //      }
+  //      if (screenState == sStatic || screenState == sGoal) {
+  //        updateFinished = true;
+  //      }
+  //
+  //      // This code swaps the second buffer to be visible (puts it on the display)
+  //      dma_display->flipDMABuffer();
+  //    }
+  //
+  //    displayReadyForDraw = false;
+  //
+  //  }
 
   unsigned long lastPanicButtonTimer;
   unsigned long panicButtonTotal;
-  now = millis();
+  //now = millis();
   //
   //  if (digitalRead(BUTTON_PIN) == LOW) {
   //    if (!panicMode)
