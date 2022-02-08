@@ -225,9 +225,12 @@ void setup() {
   server.on("/count", handleCountDown);
   server.on("/goal", handleGoal);
   server.on("/static", handleStaticMessage);
+  server.on("/vertical", handleVertical);
   server.enableCORS(true);
   server.begin();
   chatIdStr = String(chatId);
+
+  shownText = WiFi.localIP().toString();
 
 }
 
@@ -328,6 +331,56 @@ void prepareMessageAnimation(String msg) {
   delayBetweeenAnimations = HORIZONTAL_SCROLL;
 }
 
+void prepareVerticalMessageAnimation(String msg) {
+
+  prepareAnimationStart();
+
+  // Takes the contents of the message, and sets it to be displayed.
+  hiddenVersion = msg;
+  shownText = String(msg); // Making a second copy of the text.
+
+  screenState = sVert;
+  textYPosition = dma_display->height() + 7; // 7 to allow for Emoji
+  delayBetweeenAnimations = VERTICAL_SCROLL;
+  replaceEmojiText(hiddenVersion, shownText, "\n", "\n\n", "^^");
+  dma_display->setTextSize(2);
+
+  bool hasEmoji = true;
+  for (int i = 0; i < EMOJI_NUM_TYPES; i++) {
+    replaceEmojiText(hiddenVersion, shownText, emojiSymbolArray[i], "   ", emojiCodeArray[i]) || hasEmoji;
+  }
+
+  int lineCount = 0;
+  //Serial.println(hiddenVersion);
+  String hiddenTextTemp = String(hiddenVersion);
+  String visibleTextTemp = String(shownText);
+  bool keepChecking = true;
+  while (keepChecking) {
+    int endIndex = hiddenTextTemp.indexOf("^^");
+    String tempHidden;
+    String tempShown;
+    if (endIndex > 0) {
+      tempHidden = hiddenTextTemp.substring(0, endIndex);
+      tempShown = visibleTextTemp.substring(0, endIndex);
+
+      hiddenTextTemp = hiddenTextTemp.substring(endIndex + 2);
+      visibleTextTemp = visibleTextTemp.substring(endIndex + 2);
+    } else {
+      keepChecking = false;
+      tempHidden = hiddenTextTemp;
+      tempShown = visibleTextTemp;
+    }
+    //Serial.print("tempHidden: ");
+    //Serial.println(tempHidden);
+    int yOffset = (dma_display->height() * lineCount) - 7;
+    for (int i = 0; i < EMOJI_NUM_TYPES; i++) {
+      parseEmoji(tempHidden, tempShown, emojiCodeArray[i], emojiImageArray[i], dma_display, yOffset);
+    }
+    lineCount ++;
+
+  }
+}
+
 void prepareStaticMessageAnimation(String msg) {
 
   prepareAnimationStart();
@@ -405,9 +458,9 @@ void prepareGoalAnimation(int lower, int higher, int firstEmojiIndex = -1, int s
     currentEmoji->next = NULL;
   }
 
-  Serial.print(lower);
-  Serial.print("/");
-  Serial.println(higher);
+  //Serial.print(lower);
+  //Serial.print("/");
+  //Serial.println(higher);
 
   if (lower <= higher) {
     screenState = sGoal;
@@ -466,6 +519,16 @@ void handleGoal() {
 
   server.send(200, "text/plain", "Ok");
 }
+
+void handleVertical() {
+
+  String msg = server.arg("msg");
+  prepareVerticalMessageAnimation(msg);
+
+
+  server.send(200, "text/plain", "Ok");
+}
+
 
 void loop() {
   if (!displayReadyForDraw) {
@@ -537,8 +600,8 @@ void loop() {
 
         // Checking if the end of the text is off screen to the left
         dma_display->getTextBounds(shownText, 0, textYPosition + 8, &xOne, &yOne, &w, &h);
-        Serial.print("Vert Check: ");
-        Serial.println(textYPosition + h);
+        //Serial.print("Vert Check: ");
+        //Serial.println(textYPosition + h);
         if (textYPosition + h + 7 <= 0)
         {
           checkTelegram = true;

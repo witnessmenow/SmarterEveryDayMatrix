@@ -4,9 +4,9 @@
         <meta charset="utf-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+        <link rel="stylesheet" href="bootstrap.min.css">
     </head>
-  <body onload="setServerLocation()">
+  <body onload="pageLoaded()">
     <nav class="navbar navbar-dark bg-dark">
         <span class="navbar-brand h1">Smarter Every Day Matrix Display</span>
         <form class="form-inline">
@@ -38,10 +38,13 @@
             <button type="button" style='margin: 0.5em; font-size: large;' class="btn btn-default" onclick='addEmojiToText("🔭")'>JWT</button>
         </div>
         <div class="row">
-            <div class="col-8">
+            <div class="col-6">
                 <button id="messageButton" type="button" class="btn btn-default" style="height: 100%; width: 100%" onclick='sendMessage()'>Scroll Message</button>
             </div>
-            <div class="col-4">
+            <div class="col-3">
+                <button id="messageButton" type="button" class="btn btn-default" style="height: 100%; width: 100%" onclick='sendVerticalMessage()'>Vertical</button>
+            </div>
+            <div class="col-3">
                 <button id="messageButton" type="button" class="btn btn-default" style="height: 100%; width: 100%" onclick='sendStaticMessage()'>Static</button>
             </div>
         </div>
@@ -66,20 +69,23 @@
             <h3>Goal:</h3>
         </div>
         <div class="row" style="margin-bottom: 1em;">
-            <div class="col">
+            <div class="col-3">
                 <div class="input-group">
                     <div class="input-group-prepend">
                       <span class="input-group-text" id="currentLabel">Current:</span>
                     </div>
-                    <input type="number" class="form-control" id="goalCurrent">
+                    <input type="number" class="form-control" id="goalCurrent" value="0" oninput="currentChanged()" onchange="currentChanged()">
                   </div>
             </div>
-            <div class="col">
+            <div class="col-6">
+                <input type="range" style="width:100%" class="form-range" id="goalRange" oninput="rangeChanged()" onchange="rangeChanged()" value="0" >
+            </div>
+            <div class="col-3">
                 <div class="input-group">
                     <div class="input-group-prepend">
                       <span class="input-group-text" id="currentLabel">Out of:</span>
                     </div>
-                    <input type="number" class="form-control" id="goalGoal">
+                    <input type="number" class="form-control" id="goalGoal" oninput="goalChanged()" onchange="goalChanged()" value="100">
                   </div>
             </div>
         </div>
@@ -124,11 +130,18 @@
     </div>
     <hr>
     </div>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <script src="jquery.min.js"></script>
     <script>
 
         var serverLocation = ''
+
+        function pageLoaded(){
+            setServerLocation();
+            currentChanged();
+            rangeChanged();
+            goalChanged();
+
+        }
 
         function setServerLocation() {
             var serverAddressBox = document.getElementById('serverLocation');
@@ -137,7 +150,8 @@
 
         function addEmojiToText(emojiText){
             var messageBox = document.getElementById('messageBox');
-            messageBox.value = messageBox.value + emojiText;
+            insertAtCursor(messageBox, emojiText)
+            //messageBox.value = messageBox.value + emojiText;
         }
 
       function sendMessage(){
@@ -145,6 +159,15 @@
         var message = messageBox.value;
         //$.post("message", message)
         var url = serverLocation + "message?msg=" + encodeURIComponent(message);
+        $.ajax({"url": url})
+        
+      }
+
+      function sendVerticalMessage(){
+        var messageBox = document.getElementById('messageBox');
+        var message = messageBox.value;
+        //$.post("message", message)
+        var url = serverLocation + "vertical?msg=" + encodeURIComponent(message);
         $.ajax({"url": url})
         
       }
@@ -167,6 +190,44 @@
         
       }
 
+      function rangeChanged(){
+
+        //Updating the current value
+
+        var goalRange = document.getElementById('goalRange');
+
+        var goalCurrent = document.getElementById('goalCurrent');
+        goalCurrent.value = goalRange.value;
+        
+      }
+
+      function currentChanged(){
+
+        //Updating the value of the range
+
+        var goalCurrent = document.getElementById('goalCurrent');
+
+        var goalRange = document.getElementById('goalRange');
+        goalRange.value = goalCurrent.value;
+
+        }
+
+      function goalChanged(){
+
+        //Updating the range max
+
+        var goalGoal = document.getElementById('goalGoal');
+        var goalGoalValue = goalGoal.value;
+
+        var goalRange = document.getElementById('goalRange');
+        goalRange.max = goalGoalValue;
+
+        goalRange.step = goalGoalValue / 20;
+
+        rangeChanged();
+
+    }
+
       function sendGoal(){
         var goalCurrent = document.getElementById('goalCurrent');
         var goalCurrentValue = goalCurrent.value;
@@ -188,6 +249,25 @@
         $.ajax({"url": url})
         
       }
+
+      function insertAtCursor(myField, myValue) {
+        //IE support
+        if (document.selection) {
+            myField.focus();
+            sel = document.selection.createRange();
+            sel.text = myValue;
+        }
+        //MOZILLA and others
+        else if (myField.selectionStart || myField.selectionStart == 0) {
+            var startPos = myField.selectionStart;
+            var endPos = myField.selectionEnd;
+            myField.value = myField.value.substring(0, startPos)
+                + myValue
+                + myField.value.substring(endPos, myField.value.length);
+        } else {
+            myField.value += myValue;
+        }
+    }
     
     </script>
     <script> function makeAjaxCall(url){$.ajax({"url": url})}</script>
