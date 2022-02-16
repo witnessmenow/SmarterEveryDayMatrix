@@ -37,11 +37,17 @@ void parseEmoji(String stringToParse, String displayString, const char* emojiCha
 
     if(strncmp(emojiChar, "%%7%%", 5) == 0){
       currentEmoji->emojiWidth = 51;
-    } else {
+      currentEmoji->emojiHeight = 30;
+    } else if(strncmp(emojiChar, "%8%", 3) == 0){
+      // Mars Emoji is 32x32
+      currentEmoji->emojiWidth = 32;
+      currentEmoji->emojiHeight = 32;
+    }
+    else {
       currentEmoji->emojiWidth = 30;
+      currentEmoji->emojiHeight = 30;
     }
 
-    currentEmoji->emojiHeight = 30;
 
     currentEmoji->yOffset = yOffset;
     currentEmoji->next = NULL;

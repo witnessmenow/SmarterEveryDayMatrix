@@ -127,13 +127,13 @@ uint16_t textColour = myRED;
 uint16_t chartColour = myRED;
 //------- ---------------------- ------
 
-#define EMOJI_NUM_TYPES 7
+#define EMOJI_NUM_TYPES 8
 
 // T-Rex, Tall Dino, Rocket, Full Moon, Crecent Moon, Ring Planet, scope
 
-const char emojiSymbolArray[EMOJI_NUM_TYPES][5] = {"🦖", "🦕", "🚀", "🌕", "🌙", "🪐", "🔭"};
-const char emojiCodeArray[EMOJI_NUM_TYPES][6] = {"%1%", "%2%", "%3%", "%4%", "%5%", "%6%", "%%7%%"};
-const unsigned short *emojiImageArray[EMOJI_NUM_TYPES] = {BrownDino, TallDino, Rocket, Moon, Cresent, Ring, webbSmall};
+const char emojiSymbolArray[EMOJI_NUM_TYPES][5] = {"🦖", "🦕", "🚀", "🌕", "🌙", "🪐", "🔭", "🔴"};
+const char emojiCodeArray[EMOJI_NUM_TYPES][6] = {"%1%", "%2%", "%3%", "%4%", "%5%", "%6%", "%%7%%", "%8%"};
+const unsigned short *emojiImageArray[EMOJI_NUM_TYPES] = {BrownDino, TallDino, Rocket, Moon, Cresent, Ring, webbSmall, mars1};
 
 
 // For scrolling Text
@@ -247,13 +247,14 @@ void displayDriver(void * parameter) {
 
           dma_display->setCursor(textXPosition, textYPosition);
 
-          dma_display->fillRect(0, 2, dma_display->width(), 30, myBLACK);
-
+          //dma_display->fillRect(0, 0, dma_display->width(), PANEL_RES_Y, myBLACK);
+          dma_display->fillScreen(myBLACK);
           dma_display->print(shownText);
           currentEmoji = firstEmoji;
           while (currentEmoji != NULL) {
             //Serial.println("Meow");
-            drawEmoji(textXPosition, 2, currentEmoji);
+            int emojiYStart = PANEL_RES_Y - currentEmoji->emojiHeight;
+            drawEmoji(textXPosition, emojiYStart, currentEmoji);
             currentEmoji = currentEmoji->next;
           }
 
@@ -305,13 +306,15 @@ void displayDriver(void * parameter) {
 
             dma_display->setCursor(textXPosition, textYPosition);
 
-            dma_display->fillRect(0, 2, dma_display->width(), 30, myBLACK);
+            //dma_display->fillRect(0, 0, dma_display->width(), 30, myBLACK);
+            dma_display->fillScreen(myBLACK);
 
             dma_display->print(shownText);
             currentEmoji = firstEmoji;
             while (currentEmoji != NULL) {
               //Serial.println("Meow");
-              drawEmoji(textXPosition, 2, currentEmoji);
+              int emojiYStart = PANEL_RES_Y - currentEmoji->emojiHeight;
+              drawEmoji(textXPosition, emojiYStart, currentEmoji);
               currentEmoji = currentEmoji->next;
             }
 
@@ -328,32 +331,38 @@ void displayDriver(void * parameter) {
             int leftOffset = 0;
             int rightOffset = 0;
 
+            dma_display->fillScreen(myBLACK);
+
             // Left Emoji
             if (firstEmoji != NULL)
             {
 
-              drawEmoji(0, 2, firstEmoji);
+              int emojiYStart = PANEL_RES_Y - firstEmoji->emojiHeight;
+              drawEmoji(0, emojiYStart, firstEmoji);
               leftOffset = firstEmoji->emojiWidth;
 
               //Check for Right Emoji
               if (firstEmoji->next != NULL) {
                 currentEmoji = firstEmoji->next;
-                drawEmoji(0, 2, currentEmoji);
+                emojiYStart = PANEL_RES_Y - currentEmoji->emojiHeight;
+                drawEmoji(0, emojiYStart, currentEmoji);
                 rightOffset = currentEmoji->emojiWidth;
               }
             }
 
-            dma_display->fillScreen(myBLACK);
             dma_display->drawRect(leftOffset, 4, dma_display->width() - (leftOffset + rightOffset), 24, chartColour);
             dma_display->drawRect(leftOffset + 1, 5, dma_display->width() - (leftOffset + rightOffset + 2), 22, chartColour);
-            dma_display->fillRect(leftOffset, 4, goalCurrent, 24, chartColour);
-
-            currentEmoji = firstEmoji;
-            while (currentEmoji != NULL) {
-              //Serial.println("Meow");
-              drawEmoji(0, 2, currentEmoji);
-              currentEmoji = currentEmoji->next;
+            if(goalCurrent > 0){
+              dma_display->fillRect(leftOffset, 4, goalCurrent, 24, chartColour);
             }
+            
+
+            //            currentEmoji = firstEmoji;
+            //            while (currentEmoji != NULL) {
+            //              //Serial.println("Meow");
+            //              drawEmoji(0, 2, currentEmoji);
+            //              currentEmoji = currentEmoji->next;
+            //            }
           }
           checkTelegram = true;
           displayReadyForDraw = true;
@@ -638,11 +647,16 @@ void prepareGoalAnimation(int lower, int higher, int firstEmojiIndex = -1, int s
     currentEmoji->next = NULL;
     if (firstEmojiIndex == 6) {
       currentEmoji->emojiWidth = 51;
+      currentEmoji->emojiHeight = 30;
+    } else if(firstEmojiIndex == 7){
+      currentEmoji->emojiWidth = 32;
+      currentEmoji->emojiHeight = 32;
     } else {
       currentEmoji->emojiWidth = 30;
+      currentEmoji->emojiHeight = 30;
     }
 
-    currentEmoji->emojiHeight = 30;
+    
 
     emojiSpace = emojiSpace + currentEmoji->emojiWidth;
   }
@@ -653,10 +667,13 @@ void prepareGoalAnimation(int lower, int higher, int firstEmojiIndex = -1, int s
 
     if (secondEmojiIndex == 6) {
       currentEmoji->emojiWidth = 51;
+    } else if(secondEmojiIndex == 7){
+      currentEmoji->emojiWidth = 32;
+      currentEmoji->emojiHeight = 32;
     } else {
       currentEmoji->emojiWidth = 30;
+      currentEmoji->emojiHeight = 30;
     }
-    currentEmoji->emojiHeight = 30;
 
     emojiSpace = emojiSpace + currentEmoji->emojiWidth;
 
