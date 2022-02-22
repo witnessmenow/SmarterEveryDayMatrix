@@ -10,9 +10,10 @@ struct emoji
   emoji *next;
 };
 
+SemaphoreHandle_t emojiSemaphore;
+
 emoji *firstEmoji = NULL;
 emoji *currentEmoji = NULL;
-emoji *tempEmoji = NULL;
 
 // Will be used in getTextBounds.
 int16_t xOne, yOne;
@@ -22,16 +23,19 @@ uint16_t w, h;
 // to the linked list
 void parseEmoji(String stringToParse, String displayString, const char* emojiChar, const unsigned short *emojiImage, MatrixPanel_I2S_DMA *matrixDispaly, int yOffset = -1) {
   int emojiIndex = 0;
-
+  int found = 1;
+  //Serial.println(emojiChar);
   emojiIndex = stringToParse.indexOf(emojiChar);
-  while (emojiIndex >= 0) {
-    //Serial.println("Found");
+  xSemaphoreTake( emojiSemaphore, portMAX_DELAY );
+  while (emojiIndex >= 0) { 
+    //Serial.print(found);
+    //Serial.println(" Found");
+    found++;
     if (currentEmoji == NULL) {
       firstEmoji = new emoji;
       currentEmoji = firstEmoji;
     } else {
       currentEmoji->next = new emoji;
-      tempEmoji = currentEmoji;
       currentEmoji = currentEmoji->next;
     }
 
@@ -63,6 +67,7 @@ void parseEmoji(String stringToParse, String displayString, const char* emojiCha
 
     emojiIndex = stringToParse.indexOf(emojiChar, emojiIndex + 1);
   }
+  xSemaphoreGive( emojiSemaphore );
 }
 
 bool replaceEmojiText(String &hiddenString, String &shownString, const char* emojiChar, const char* visibleReplacement, const char* hiddenReplacement) {
@@ -79,6 +84,8 @@ bool replaceEmojiText(String &hiddenString, String &shownString, const char* emo
 }
 
 void destroyEmojiList() {
+  xSemaphoreTake( emojiSemaphore, portMAX_DELAY );
+  emoji *tempEmoji = NULL;
   currentEmoji = firstEmoji;
   while (currentEmoji != NULL) {
     tempEmoji = currentEmoji;
@@ -86,4 +93,5 @@ void destroyEmojiList() {
     delete tempEmoji;
   }
   firstEmoji = NULL;
+  xSemaphoreGive( emojiSemaphore );
 }

@@ -110,10 +110,11 @@ bool shouldSaveConfig = false;
 
 #define FONT_SIZE 2 // Text will be FONT_SIZE x 8 pixels tall.
 
-#define VERTICAL_SCROLL 120
-#define HORIZONTAL_SCROLL 35
+int verticalScrollSpeed  = 120;
+int horizontalScrollSpeed = 35;
+int pauseAtVertical = 500;
 
-int delayBetweeenAnimations = HORIZONTAL_SCROLL; // How fast it scrolls, Smaller == faster
+int delayBetweeenAnimations = horizontalScrollSpeed; // How fast it scrolls, Smaller == faster
 int scrollXMove = -1; //If positive it would scroll right
 int scrollYMove = -1; //If positive it would scroll down (would need to adjust start position)
 
@@ -196,16 +197,22 @@ const char *webpage =
   ;
 
 void displayDriver(void * parameter) {
+  AnimationState lastRanState;
+  int additionalWaitTime = 0;
   while (true) {
-
+    
     if (!displayReadyForDraw) {
 
       // Because we are using a double buffer, we don't need to wait
       // for when the animation is due before drawing it to the buffer
       // it will only get swapped onto the display when the animation is due.
 
-
-      switch ( screenState) {
+      additionalWaitTime = 0;
+      
+      int tempEC = 0;
+      emoji *tempEmoji = NULL;
+      lastRanState = screenState;
+      switch ( lastRanState) {
         case sCount:
           {
             unsigned long countNow = millis();
@@ -250,13 +257,18 @@ void displayDriver(void * parameter) {
           //dma_display->fillRect(0, 0, dma_display->width(), PANEL_RES_Y, myBLACK);
           dma_display->fillScreen(myBLACK);
           dma_display->print(shownText);
-          currentEmoji = firstEmoji;
-          while (currentEmoji != NULL) {
-            //Serial.println("Meow");
-            int emojiYStart = PANEL_RES_Y - currentEmoji->emojiHeight;
-            drawEmoji(textXPosition, emojiYStart, currentEmoji);
-            currentEmoji = currentEmoji->next;
+          xSemaphoreTake( emojiSemaphore, portMAX_DELAY );
+          tempEmoji = firstEmoji;
+
+          //tempEC = 0;
+          while (tempEmoji != NULL) {
+            //Serial.println(tempEC);
+            //tempEC++;
+            int emojiYStart = PANEL_RES_Y - tempEmoji->emojiHeight;
+            drawEmoji(textXPosition, emojiYStart, tempEmoji);
+            tempEmoji = tempEmoji->next;
           }
+          xSemaphoreGive( emojiSemaphore );
 
           displayReadyForDraw = true;
           break;
@@ -266,7 +278,7 @@ void displayDriver(void * parameter) {
           // Update Y position of text
           textYPosition += scrollYMove;
 
-          // Checking if the end of the text is off screen to the left
+          // Checking if the end of the text is off screen to the top
           dma_display->getTextBounds(shownText, 0, textYPosition + 8, &xOne, &yOne, &w, &h);
           //Serial.print("Vert Check: ");
           //Serial.println(textYPosition + h);
@@ -278,27 +290,36 @@ void displayDriver(void * parameter) {
             textYPosition = dma_display->height() + 7;
           }
 
+          if((textYPosition - 8)% 32 == 0){
+            additionalWaitTime = pauseAtVertical;
+            //Serial.println("pause");
+          }
+
           //textXPosition = (dma_display->width() / 2) - (w / 2) + 1;
 
           dma_display->setCursor(0, textYPosition);
+          //Serial.println(textYPosition);
 
           dma_display->fillScreen(myBLACK);
 
           dma_display->print(shownText);
-          currentEmoji = firstEmoji;
-          while (currentEmoji != NULL) {
+          xSemaphoreTake( emojiSemaphore, portMAX_DELAY );
+          tempEmoji = firstEmoji;
+          while (tempEmoji != NULL) {
             //Serial.println("Meow");
-            drawEmoji(0, textYPosition + currentEmoji->yOffset, currentEmoji);
-            currentEmoji = currentEmoji->next;
+            drawEmoji(0, textYPosition + tempEmoji->yOffset, tempEmoji);
+            tempEmoji = tempEmoji->next;
           }
+          xSemaphoreGive( emojiSemaphore );
 
           displayReadyForDraw = true;
           break;
 
         case sStatic:
-
+          //Serial.println("sStatic");
           if (!updateFinished)
           {
+            //Serial.println("!updateFinished");
             // Checking if the end of the text is off screen to the left
             dma_display->getTextBounds(shownText, textXPosition, textYPosition, &xOne, &yOne, &w, &h);
 
@@ -310,13 +331,15 @@ void displayDriver(void * parameter) {
             dma_display->fillScreen(myBLACK);
 
             dma_display->print(shownText);
-            currentEmoji = firstEmoji;
-            while (currentEmoji != NULL) {
+            xSemaphoreTake( emojiSemaphore, portMAX_DELAY );
+            tempEmoji = firstEmoji;
+            while (tempEmoji != NULL) {
               //Serial.println("Meow");
-              int emojiYStart = PANEL_RES_Y - currentEmoji->emojiHeight;
-              drawEmoji(textXPosition, emojiYStart, currentEmoji);
-              currentEmoji = currentEmoji->next;
+              int emojiYStart = PANEL_RES_Y - tempEmoji->emojiHeight;
+              drawEmoji(textXPosition, emojiYStart, tempEmoji);
+              tempEmoji = tempEmoji->next;
             }
+            xSemaphoreGive( emojiSemaphore );
 
           }
           checkTelegram = true;
@@ -352,10 +375,10 @@ void displayDriver(void * parameter) {
 
             dma_display->drawRect(leftOffset, 4, dma_display->width() - (leftOffset + rightOffset), 24, chartColour);
             dma_display->drawRect(leftOffset + 1, 5, dma_display->width() - (leftOffset + rightOffset + 2), 22, chartColour);
-            if(goalCurrent > 0){
+            if (goalCurrent > 0) {
               dma_display->fillRect(leftOffset, 4, goalCurrent, 24, chartColour);
             }
-            
+
 
             //            currentEmoji = firstEmoji;
             //            while (currentEmoji != NULL) {
@@ -374,29 +397,36 @@ void displayDriver(void * parameter) {
     unsigned long now = millis();
     if (now > isAnimationDue)
     {
-      // This sets the timer for when we should scroll again.
-      isAnimationDue = now + delayBetweeenAnimations;
+      AnimationState currentState = screenState;
+      // Checking if we are in a strange spot where we are due to draw, but the wrong
+      // animation is loaded;
+      if (currentState == lastRanState) {
+        // This sets the timer for when we should scroll again.
+        isAnimationDue = now + delayBetweeenAnimations + additionalWaitTime;
 
-      if (screenState == sCount && lastDisplayedCount == countDownValue) {
-        // No need to display
-      } else if (screenState == sStatic && updateFinished) {
-        // No need to display
-      } else if (screenState == sGoal && updateFinished) {
-        // No need to display
+        if (screenState == sCount && lastDisplayedCount == countDownValue) {
+          // No need to display
+        } else if (screenState == sStatic && updateFinished) {
+          // No need to display
+        } else if (screenState == sGoal && updateFinished) {
+          // No need to display
+        } else {
+          if (screenState == sCount)
+          {
+            lastDisplayedCount = countDownValue;
+          }
+          if (screenState == sStatic || screenState == sGoal) {
+            updateFinished = true;
+          }
+
+          // This code swaps the second buffer to be visible (puts it on the display)
+          dma_display->flipDMABuffer();
+        }
+
+        displayReadyForDraw = false;
       } else {
-        if (screenState == sCount)
-        {
-          lastDisplayedCount = countDownValue;
-        }
-        if (screenState == sStatic || screenState == sGoal) {
-          updateFinished = true;
-        }
-
-        // This code swaps the second buffer to be visible (puts it on the display)
-        dma_display->flipDMABuffer();
+        displayReadyForDraw = false;
       }
-
-      displayReadyForDraw = false;
     }
   }
 }
@@ -442,11 +472,14 @@ void setup() {
   server.on("/goal", handleGoal);
   server.on("/static", handleStaticMessage);
   server.on("/vertical", handleVertical);
+  server.on("/settings", handleSettings);
   server.enableCORS(true);
   server.begin();
   chatIdStr = String(chatId);
 
   shownText = WiFi.localIP().toString();
+
+  emojiSemaphore = xSemaphoreCreateMutex();
 
   xTaskCreatePinnedToCore(
     displayDriver,          // Function that should be called
@@ -510,6 +543,7 @@ void processEmoji() {
 
   if (hasEmoji)
   {
+    //Serial.println(hiddenVersion);
     for (int i = 0; i < EMOJI_NUM_TYPES; i++) {
       parseEmoji(hiddenVersion, shownText, emojiCodeArray[i], emojiImageArray[i], dma_display);
     }
@@ -536,7 +570,7 @@ void prepareMessageAnimation(String msg) {
   shownText = String(msg); // Making a second copy of the text.
 
   //Stripping out new line
-  replaceEmojiText(hiddenVersion, shownText, "\n", "", "");
+  replaceEmojiText(hiddenVersion, shownText, "\n", " ", " ");
 
   dma_display->setTextSize(FONT_SIZE);
   processEmoji();
@@ -544,7 +578,7 @@ void prepareMessageAnimation(String msg) {
   screenState = sScroll;
   textXPosition = dma_display->width();
   textYPosition = dma_display->height() / 2 - (FONT_SIZE * 8 / 2);
-  delayBetweeenAnimations = HORIZONTAL_SCROLL;
+  delayBetweeenAnimations = horizontalScrollSpeed;
 }
 
 void prepareVerticalMessageAnimation(String msg) {
@@ -557,7 +591,7 @@ void prepareVerticalMessageAnimation(String msg) {
 
   screenState = sVert;
   textYPosition = dma_display->height() + 7; // 7 to allow for Emoji
-  delayBetweeenAnimations = VERTICAL_SCROLL;
+  delayBetweeenAnimations = verticalScrollSpeed;
   replaceEmojiText(hiddenVersion, shownText, "\n", "\n\n", "^^");
   dma_display->setTextSize(2);
 
@@ -639,48 +673,51 @@ void prepareGoalAnimation(int lower, int higher, int firstEmojiIndex = -1, int s
 
   prepareAnimationStart();
   int emojiSpace = 0;
+  xSemaphoreTake( emojiSemaphore, portMAX_DELAY );
+  emoji *tempEmoji = NULL;
   if (firstEmojiIndex >= 0) {
     firstEmoji = new emoji;
-    currentEmoji = firstEmoji;
-    currentEmoji->xOffset = 0;
-    currentEmoji->image = emojiImageArray[firstEmojiIndex];
-    currentEmoji->next = NULL;
+    firstEmoji = firstEmoji;
+    firstEmoji->xOffset = 0;
+    firstEmoji->image = emojiImageArray[firstEmojiIndex];
+    firstEmoji->next = NULL;
     if (firstEmojiIndex == 6) {
-      currentEmoji->emojiWidth = 51;
-      currentEmoji->emojiHeight = 30;
-    } else if(firstEmojiIndex == 7){
-      currentEmoji->emojiWidth = 32;
-      currentEmoji->emojiHeight = 32;
+      firstEmoji->emojiWidth = 51;
+      firstEmoji->emojiHeight = 30;
+    } else if (firstEmojiIndex == 7) {
+      firstEmoji->emojiWidth = 32;
+      firstEmoji->emojiHeight = 32;
     } else {
-      currentEmoji->emojiWidth = 30;
-      currentEmoji->emojiHeight = 30;
+      firstEmoji->emojiWidth = 30;
+      firstEmoji->emojiHeight = 30;
     }
 
-    
 
-    emojiSpace = emojiSpace + currentEmoji->emojiWidth;
+
+    emojiSpace = emojiSpace + firstEmoji->emojiWidth;
   }
 
   if (secondEmojiIndex >= 0) {
-    currentEmoji->next = new emoji;
-    currentEmoji = currentEmoji->next;
+    firstEmoji->next = new emoji;
+    tempEmoji = currentEmoji->next;
 
     if (secondEmojiIndex == 6) {
-      currentEmoji->emojiWidth = 51;
-    } else if(secondEmojiIndex == 7){
-      currentEmoji->emojiWidth = 32;
-      currentEmoji->emojiHeight = 32;
+      tempEmoji->emojiWidth = 51;
+    } else if (secondEmojiIndex == 7) {
+      tempEmoji->emojiWidth = 32;
+      tempEmoji->emojiHeight = 32;
     } else {
-      currentEmoji->emojiWidth = 30;
-      currentEmoji->emojiHeight = 30;
+      tempEmoji->emojiWidth = 30;
+      tempEmoji->emojiHeight = 30;
     }
 
-    emojiSpace = emojiSpace + currentEmoji->emojiWidth;
+    emojiSpace = emojiSpace + tempEmoji->emojiWidth;
 
-    currentEmoji->xOffset = dma_display->width() - currentEmoji->emojiWidth;
-    currentEmoji->image = emojiImageArray[secondEmojiIndex];
-    currentEmoji->next = NULL;
+    tempEmoji->xOffset = dma_display->width() - tempEmoji->emojiWidth;
+    tempEmoji->image = emojiImageArray[secondEmojiIndex];
+    tempEmoji->next = NULL;
   }
+  xSemaphoreGive( emojiSemaphore );
 
   //Serial.print(lower);
   //Serial.print("/");
@@ -749,6 +786,20 @@ void handleVertical() {
   String msg = server.arg("msg");
   prepareVerticalMessageAnimation(msg);
 
+
+  server.send(200, "text/plain", "Ok");
+}
+
+void handleSettings() {
+
+  String tempStr = server.arg("horizontal");
+  horizontalScrollSpeed = tempStr.toInt();
+  
+  tempStr = server.arg("vertical");
+  verticalScrollSpeed = tempStr.toInt();
+
+  tempStr = server.arg("vPause");
+  pauseAtVertical = tempStr.toInt();
 
   server.send(200, "text/plain", "Ok");
 }
@@ -1127,7 +1178,7 @@ void loop() {
   //          } else if (hiddenVersion.indexOf("\n") >= 0) {
   //            screenState = sVert;
   //            textYPosition = dma_display->height() + 7; // 7 to allow for Emoji
-  //            delayBetweeenAnimations = VERTICAL_SCROLL;
+  //            delayBetweeenAnimations = verticalScrollSpeed;
   //            replaceEmojiText(hiddenVersion, shownText, "\n", "\n\n", "^^");
   //            dma_display->setTextSize(2);
   //
@@ -1191,7 +1242,7 @@ void loop() {
   //            screenState = sScroll;
   //            textXPosition = dma_display->width();
   //            textYPosition = dma_display->height() / 2 - (FONT_SIZE * 8 / 2);
-  //            delayBetweeenAnimations = HORIZONTAL_SCROLL;
+  //            delayBetweeenAnimations = horizontalScrollSpeed;
   //            dma_display->setTextSize(FONT_SIZE);
   //          }
   //        }

@@ -131,7 +131,49 @@
             <button id="goalButton" type="button" class="btn btn-default" style="height: 100%; width: 100%" onclick='sendGoal()'>Send Goal</button>
         </div>
     </div>
+    <br>
     <hr>
+    <div class="container"> 
+        <div class="row">
+            <h3>Speed settings:</h3>
+        </div>
+        <div class="row">
+            <ul>
+                <li>Bigger is slower.</li>
+                <li>Vertical pause has immediate effect.</li>
+                <li>Horizontal and vertical speed only apply on the next message sent.</li>
+                <li>These values reset when the board restarts.</li>
+            </ul>
+        </div>
+        <div class="row">
+            <div class="col-3">
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                      <span class="input-group-text" id="horizontalLabel">Horizontal (35):</span>
+                    </div>
+                    <input type="number" class="form-control" id="horizontal" value="35">
+                  </div>
+            </div>
+            <div class="col-3">
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                      <span class="input-group-text" id="verticalLabel">Vertical (120):</span>
+                    </div>
+                    <input type="number" class="form-control" id="vertical" value="120">
+                  </div>
+            </div>
+            <div class="col-3">
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                      <span class="input-group-text" id="vPauseLabel">Vertical Pause (500):</span>
+                    </div>
+                    <input type="number" class="form-control" id="vPause" value="500">
+                  </div>
+            </div>
+            <div class="col-3">
+                <button id="settingsButton" type="button" class="btn btn-default" style="height: 100%; width: 100%" onclick='sendSettings()'>updateSettings</button>
+            </div>
+        </div>
     </div>
     <script src="jquery.min.js"></script>
     <script>
@@ -155,6 +197,19 @@
             var messageBox = document.getElementById('messageBox');
             insertAtCursor(messageBox, emojiText)
             //messageBox.value = messageBox.value + emojiText;
+        }
+
+        function sendSettings(){
+            var url = serverLocation + "settings";
+            var horizontal = document.getElementById('horizontal');
+            url = url + "?horizontal=" + horizontal.value;
+            var vertical = document.getElementById('vertical');
+            url = url + "&vertical=" + vertical.value;
+            var vPause = document.getElementById('vPause');
+            url = url + "&vPause=" + vPause.value;
+
+            $.ajax({"url": url})
+            
         }
 
       function sendMessage(){
@@ -253,24 +308,37 @@
         
       }
 
-      function insertAtCursor(myField, myValue) {
-        //IE support
-        if (document.selection) {
-            myField.focus();
-            sel = document.selection.createRange();
-            sel.text = myValue;
-        }
-        //MOZILLA and others
-        else if (myField.selectionStart || myField.selectionStart == 0) {
-            var startPos = myField.selectionStart;
-            var endPos = myField.selectionEnd;
-            myField.value = myField.value.substring(0, startPos)
-                + myValue
-                + myField.value.substring(endPos, myField.value.length);
-        } else {
-            myField.value += myValue;
-        }
+      function insertAtCursor(el, newText) {
+        const start = el.selectionStart
+        const end = el.selectionEnd
+        const text = el.value
+        const before = text.substring(0, start)
+        const after  = text.substring(end, text.length)
+        el.value = (before + newText + after)
+        el.selectionStart = el.selectionEnd = start + newText.length
+        el.focus()
     }
+
+    //   function insertAtCursor(myField, myValue) {
+    //     //IE support
+    //     if (document.selection) {
+    //         myField.focus();
+    //         sel = document.selection.createRange();
+    //         sel.text = myValue;
+    //     }
+    //     //MOZILLA and others
+    //     else if (myField.selectionStart || myField.selectionStart == '0') {
+    //         var startPos = myField.selectionStart;
+    //         var endPos = myField.selectionEnd;
+    //         myField.value = myField.value.substring(0, startPos)
+    //             + myValue
+    //             + myField.value.substring(endPos, myField.value.length);
+    //         myField.selectionStart = startPos + myValue.length;
+    //         myField.selectionEnd = startPos + myValue.length;
+    //     } else {
+    //         myField.value += myValue;
+    //     }
+    //}
     
     </script>
     <script> function makeAjaxCall(url){$.ajax({"url": url})}</script>
